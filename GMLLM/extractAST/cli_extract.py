@@ -6,6 +6,7 @@ import json
 from graph_builder import ProjectGraphBuilder
 from llm_detector import LLMBehaviorDetector
 from exporter import save_call_graph
+from month_utils import generate_month_range
 
 def extract_call_graph(src_path: Path | str, out_path: Path | str,
                        model_name: str = "gpt-4o",
@@ -208,9 +209,9 @@ def batch_extract_call_graphs(base_path: Path | str, model_name: str = "qwen3-ma
         use_rule_fallback=True,
     )
     try:
-        obj = detector.synthesize_rules()
+        # obj = detector.synthesize_rules()
         synth_path = Path("/Data2/hxq/GMLLM/GMLLM/extractAST/synth_rules.json")
-        synth_path.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
+        # synth_path.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
         detector.load_synth_rules(synth_path)
         log(f"[ok] 规则合成成功，保存在 {synth_path}")
     except Exception as e:
@@ -220,29 +221,33 @@ def batch_extract_call_graphs(base_path: Path | str, model_name: str = "qwen3-ma
     overall_start = time.time()
     total_packages = 0
 
-    # 获取所有月份目录 (yyyy-mm 格式)
-    months = sorted([d for d in base_path.iterdir() if d.is_dir() and len(d.name) == 7 and d.name[4] == "-"])
+    pkg_types = ["benign", "malicious"]
 
-    for month in months:
-        month_str = month.name
+    for pkg_type in pkg_types:
+        type_dir = base_path / pkg_type
+
         log(f"\n{'='*60}")
-        log(f"正在处理 {month_str} 月")
+        log(f"正在处理 {pkg_type} 包")
         log("=" * 60)
 
-        for pkg_type in ["malicious", "benign"]:
-            pkg_dir = month / pkg_type
-            if not pkg_dir.exists():
-                log(f"  {pkg_type}: 目录不存在，跳过")
+        # 获取该类型下的所有月份目录
+        months = generate_month_range("2022-01", "2024-12")
+
+        for month_str in months:
+            month_dir = type_dir / month_str
+
+            if not month_dir.exists():
+                log(f"  {month_str}: 目录不存在，跳过")
                 continue
 
             log(f"\n  正在处理 {month_str} 月的 {pkg_type} 包")
 
             # 获取所有包目录
-            packages = [p for p in pkg_dir.iterdir() if p.is_dir()]
+            packages = [p for p in month_dir.iterdir() if p.is_dir()]
             month_pkg_count = 0
             month_start = time.time()
 
-            for pkg in sorted(packages):
+            for pkg in packages:
                 pkg_start = time.time()
                 log(f"    处理包: {pkg.name}")
 
@@ -274,9 +279,36 @@ def batch_extract_call_graphs(base_path: Path | str, model_name: str = "qwen3-ma
 
 if __name__ == "__main__":
     batch_extract_call_graphs(
-        base_path="/Data2/hxq/datasets/incremental_packages",
+        base_path="/Data2/hxq/datasets/incremental_packages_subset/",
         model_name="qwen3-max",
     )
     # extract_call_graph(src_path="/Data2/hxq/datasets/incremental_packages/2022-01/malicious/AadhaarCrypt-1.0",
     #                    out_path="/Data2/hxq/datasets/incremental_packages/2022-01/malicious/AadhaarCrypt-1.0",
     #                    model_name="qwen3-max")
+    # model_name = "qwen3-max"
+    # pkg_path = "/Data2/hxq/datasets/incremental_packages_subset/malicious/2023-07/requests-toolbelt-v2-0.0.1/"
+    # log_file_path = Path("/Data2/hxq/GMLLM/GMLLM/extractAST/batch_extract.log")
+    # log_file_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # # 清空日志文件
+    # log_file_path.write_text("", encoding="utf-8")
+
+    # log("=" * 60)
+    # log("开始批量提取 Call Graph")
+    # log(f"Model: {model_name}")
+    # log("=" * 60)
+
+    # # 只合成一次规则，复用于所有包
+    # log("\n[1/2] 正在合成规则...")
+    # detector = LLMBehaviorDetector(
+    #     model_name=model_name,
+    #     use_rule_fallback=True,
+    # )
+    
+    # log("\n[2/2] 开始处理所有包...")
+    # overall_start = time.time()
+    # extract_call_graph(
+    #     src_path=pkg_path,
+    #     out_path=pkg_path,
+    #     detector=detector,
+    # )

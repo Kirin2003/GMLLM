@@ -280,5 +280,6 @@ class LLMBehaviorDetector:
 
         code = compile(ast.fix_missing_locations(ast.Expression(lam)), "<synth_rule>", "eval")
         def _fn(n):
-            return eval(code, {"__builtins__": {}}, {"n": n})
+            fn = eval(code, {"__builtins__": {}}, {"n": n})
+            return fn(n)
         return _fn
