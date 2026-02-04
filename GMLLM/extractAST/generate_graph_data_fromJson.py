@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import torch
 from pathlib import Path
 import argparse
@@ -262,7 +263,12 @@ if __name__ == "__main__":
     normal_out = "/Data2/hxq/datasets/incremental_packages_subset/benign_call_processed"
     malicious_out = "/Data2/hxq/datasets/incremental_packages_subset/malicious_call_processed"
     VOCAB_DIR = "/Data2/hxq/datasets/incremental_packages_subset/vocab"
+
+    print("\n[1/3] Building global vocab...")
+    vocab_start = time.time()
     name2idx, type2idx, edge_type2idx, behavior2idx = build_global_vocab([normal_root, malicious_root], start_month='2022-01', end_month='2023-02')
+    vocab_time = time.time() - vocab_start
+    print(f"  build_global_vocab completed in {vocab_time:.2f}s")
     os.makedirs(VOCAB_DIR, exist_ok=True)
     with open(str(Path(VOCAB_DIR) / "name2idx.json"), 'w') as f:
         json.dump(name2idx, f, indent=2)
@@ -274,7 +280,9 @@ if __name__ == "__main__":
         json.dump(behavior2idx, f, indent=2)
     clean_dir(normal_out)
     clean_dir(malicious_out)
-    print("\nProcessing benign packages...")
+
+    print("\n[2/3] Processing benign packages...")
+    benign_start = time.time()
     _ = CallGraphDatasetFull_Lazy(
         root_dir=normal_root,
         output_dir=normal_out,
@@ -286,7 +294,11 @@ if __name__ == "__main__":
         start_month='2022-01',
         end_month='2024-12'
     )
-    print("\nProcessing malicious packages...")
+    benign_time = time.time() - benign_start
+    print(f"  CallGraphDatasetFull_Lazy (benign) completed in {benign_time:.2f}s")
+
+    print("\n[3/3] Processing malicious packages...")
+    malicious_start = time.time()
     _ = CallGraphDatasetFull_Lazy(
         root_dir=malicious_root,
         output_dir=malicious_out,
@@ -298,4 +310,13 @@ if __name__ == "__main__":
         start_month='2022-01',
         end_month='2024-12'
     )
-    print("Dataset processing complete.")
+    malicious_time = time.time() - malicious_start
+    print(f"  CallGraphDatasetFull_Lazy (malicious) completed in {malicious_time:.2f}s")
+
+    print("\n" + "=" * 60)
+    print("Summary:")
+    print(f"  build_global_vocab:       {vocab_time:.2f}s")
+    print(f"  CallGraphDatasetFull_Lazy (benign):    {benign_time:.2f}s")
+    print(f"  CallGraphDatasetFull_Lazy (malicious): {malicious_time:.2f}s")
+    print(f"  Total:                    {vocab_time + benign_time + malicious_time:.2f}s")
+    print("=" * 60)
