@@ -1,4 +1,0 @@
-{
-    "package": "jeilyfish",
-    "overview": "jeilyfish is a malicious package.\n\nThe package steals SSH and GPG keys from infected machines and sends them to a remote server."
-}

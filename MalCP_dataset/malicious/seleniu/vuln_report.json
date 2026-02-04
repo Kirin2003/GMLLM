@@ -1,4 +1,0 @@
-{
-    "package": "seleniu",
-    "overview": "numpy-selenium is a malicious package. This package contains encoded code that, upon execution downloads a second piece of malware hosted on a legitimate service (replit.com). The downloaded malware is designed to steal the victims information, including credentials, file names, screenshots etc."
-}

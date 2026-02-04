@@ -1,4 +1,0 @@
-{
-    "package": "sentinelonesdk",
-    "overview": "SentineloneSDK is a malicious package. This is a \"dependency confusion\" package, which means the package name is based on existing repositories, namespaces, or components, it aims to trick users into downloading a package that contains malicious code.\n\nIn December 2022, threat actors impersonated SentinelOne by uploading fake software development kits (SDKs) onto PyPI. The SDKs contain fully functional SentinelOne clients, but the packages also contain malicious backdoors that are only executed when called on programmatically, as opposed to during installation."
-}

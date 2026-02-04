@@ -1,4 +1,0 @@
-{
-    "package": "pytorcm",
-    "overview": "PyTorcm is a malicious package. This package uses typosquatting techniques, which are intended to trick users into downloading and installing the malicious package instead of the intended legitimate one. The malicious payload aims to steal crypto wallets, sensitive data from browsers, and various credentials."
-}

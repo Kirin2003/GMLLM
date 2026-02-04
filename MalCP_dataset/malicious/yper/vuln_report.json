@@ -1,4 +1,0 @@
-{
-    "package": "yper",
-    "overview": "Affected versions of this package are vulnerable to Directory Traversal due to insufficient checks in the files.py file which allows an attacker to modify files outside of the project. The attacker can use the configuration file provides a field that can be used cause files to be edited without displaying the prompt.\n\nNote: The default behaviour of hyper-bump-it is to display the planned changes and prompt the user for confirmation before editing any files."
-}

@@ -1,4 +1,0 @@
-{
-    "package": "pywool",
-    "overview": "pywool is a malicious package. The attack chain is triggered by package installation via malicious code embedded within the setup.py file. The scripts then deploy VBScript and batch files within the System64 directory that download and execute a file named Runtime.exe. This file is a Python program that is designed to steal extensive sensitive information from the compromised system, various browsers, and applications."
-}

@@ -1,4 +1,0 @@
-{
-    "package": "selfvisapostosint",
-    "overview": "selfvisapostosint is a malicious package. This package contains a malicious code in its setup.py file which tries to run a PowerShell command that attempts to download a malicious executable and execute it."
-}

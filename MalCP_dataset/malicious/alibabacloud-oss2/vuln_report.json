@@ -1,4 +1,0 @@
-{
-    "package": "alibabacloud-oss2",
-    "overview": "alibabacloud-oss2 is a malicious package. This package contains malicious code that surreptitiously exfiltrates cloud provider access and secret keys to an attacker-controlled remote URL."
-}

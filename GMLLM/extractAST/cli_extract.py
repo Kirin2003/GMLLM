@@ -169,7 +169,7 @@ def main():
 import time
 from datetime import datetime
 
-LOG_FILE = Path("/Data2/hxq/GMLLM/GMLLM/extractAST/batch_extract.log")
+LOG_FILE = Path("../log/batch_extract.log")
 
 def log(msg: str):
     """输出日志到文件和控制台"""

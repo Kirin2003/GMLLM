@@ -1,4 +1,0 @@
-{
-    "package": "tensorflo",
-    "overview": "intel-extension-for-tensorflow is an Intel® Extension for Tensorflow*\n\nAffected versions of this package are vulnerable to Out-of-bounds Write due to improper buffer restrictions. An authenticated user can escalate privileges."
-}

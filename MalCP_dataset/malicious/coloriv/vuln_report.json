@@ -1,4 +1,0 @@
-{
-    "package": "coloriv",
-    "overview": "coloriv is a malicious package. This package contains a malware that includes a reverse shell code and binds shell scripts."
-}

@@ -1,4 +1,0 @@
-{
-    "package": "ccryptofeed",
-    "overview": "Affected versions of this package are vulnerable to Race Condition. This issue aroises during the resetting of feeds with multiple connections, leading to potential unauthorized access or data corruption."
-}

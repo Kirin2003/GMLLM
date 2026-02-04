@@ -1,4 +1,0 @@
-{
-    "package": "python-aliyun-sdk-ecs",
-    "overview": "python-aliyun-sdk-ecs is a malicious package. This package contains malicious code that, instead of executing automatically upon installation, is strategically embedded within specific functions to trigger only when those functions are called. By employing Typosquatting and Starjacking techniques, the attacker tricks developers into downloading these malicious packages, which then execute malicious scripts during regular usage of the targeted Alibaba Cloud, AWS, and Telegram services."
-}

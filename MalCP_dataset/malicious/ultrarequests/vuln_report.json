@@ -1,4 +1,0 @@
-{
-    "package": "ultrarequests",
-    "overview": "ultrarequests is a malicious package. This package attempts to mask itself as a legitimate HTTP library (like requests), but contains malicious code that downloads obfuscated malicious scripts that steal secret credentials and sensitive information."
-}

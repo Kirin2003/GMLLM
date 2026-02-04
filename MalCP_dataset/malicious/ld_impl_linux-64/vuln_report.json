@@ -1,4 +1,0 @@
-{
-    "package": "ld_impl_linux-64",
-    "overview": "ld-impl-linux-64 is a malicious package. This package contains a malware that includes a reverse shell code and binds shell scripts."
-}

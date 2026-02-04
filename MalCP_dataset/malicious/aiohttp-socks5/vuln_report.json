@@ -1,4 +1,0 @@
-{
-    "package": "aiohttp-socks5",
-    "overview": "aiohttp-socks5 is a malicious package. This package contains Remote Access Trojan (RAT) that compromises a victim's system completely. The package has a fake 'metadata' field in setup.py, which is a base64-encoded malicious EXE file. the field is further followed by code that decodes this string value, saves it into an EXE file, pip_installer.exe and runs this malicious executable."
-}

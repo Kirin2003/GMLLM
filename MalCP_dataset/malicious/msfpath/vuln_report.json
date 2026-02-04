@@ -1,4 +1,0 @@
-{
-    "package": "msfpath",
-    "overview": "msfpath is a malicious package. It launches a reverse shell that connects back to a malicious host."
-}

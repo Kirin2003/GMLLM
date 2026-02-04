@@ -1,4 +1,0 @@
-{
-    "package": "supertest9188",
-    "overview": "supertest9188 is a malicious package. This package uses \"typosquatting\" to bait unaware users to install it. It contains code executed upon installation which downloads and executes a windows executable that allows sending data, installing certificates, and executing and downloading files.\n\nNote: The package runs the malicious script only if the victim’s operating system is Windows"
-}

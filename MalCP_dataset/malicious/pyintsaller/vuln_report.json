@@ -1,4 +1,0 @@
-{
-    "package": "pyintsaller",
-    "overview": "pyintsaller is a malicious package. This is a \"dependency confusion\" package, which means the package name is based on existing repositories, namespaces, or components. It aims to trick users into downloading the package which contains malicious code."
-}

@@ -1,4 +1,0 @@
-{
-    "package": "discorder",
-    "overview": "discorder is a malicious package. It installs information-stealing and RAT (remote access trojan) Malware while using Cloudflare Tunnel to bypass firewall restrictions for remote access."
-}

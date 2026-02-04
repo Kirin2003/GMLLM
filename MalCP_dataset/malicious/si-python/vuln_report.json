@@ -1,4 +1,0 @@
-{
-    "package": "si-python",
-    "overview": "libfwsi-python is a Python bindings module for libfwsi\n\nAffected versions of this package are vulnerable to Buffer Over-read. libfwsi_extension_block_copy_from_byte_stream in libfwsi_extension_block.c has a heap-based buffer over-read because rejection of an unsupported size only considers values less than 6, even though values of 6 and 7 are also unsupported."
-}

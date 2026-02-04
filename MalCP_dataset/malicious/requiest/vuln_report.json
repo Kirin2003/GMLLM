@@ -1,4 +1,0 @@
-{
-    "package": "requiest",
-    "overview": "requiest is a malicious package. This malicious package attempts typosquatting the popular requests package. The malicious script is base64 obfuscated and tries to steal the current username and platform information and send them to a remote host."
-}

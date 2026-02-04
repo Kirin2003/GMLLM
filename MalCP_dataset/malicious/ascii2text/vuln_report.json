@@ -1,4 +1,0 @@
-{
-    "package": "ascii2text",
-    "overview": "ascii2text is a malicious package. This package is mimicking \"art\" library by using the same description minus the release details. The package contains a malicious code in its __init__.py file imported by the setup.py installation script. The code installs a malicious script that searches for local passwords and uploads them using a discord webhook."
-}

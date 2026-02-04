@@ -1,4 +1,0 @@
-{
-    "package": "saturnian",
-    "overview": "saturnian is a malicious package. It downloads and executes malicious exe files containing malicious code that attempts to steal information from Google Chrome, tokens from Discord, and Injects a Discord malware."
-}

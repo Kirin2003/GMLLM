@@ -1,4 +1,0 @@
-{
-    "package": "progressbaar2",
-    "overview": "progressbaar2 is a malicious package. This package contains a malicious code that downloads a malicious browser extension that replaces copied Crypto wallet addresses with hard-coded wallet addresses of the attacker."
-}

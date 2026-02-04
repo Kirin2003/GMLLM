@@ -1,4 +1,0 @@
-{
-    "package": "httpgrand",
-    "overview": "httpgrand is a malicious package. This package contains malicious code in its 'setup.py' that downloads and executes a malicious Rust file called 'Esquele.exe', which installs several malware modules."
-}
