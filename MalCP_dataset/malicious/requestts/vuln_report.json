@@ -1,0 +1,4 @@
+{
+    "package": "requestts",
+    "overview": "requestts is a malicious package. This package uses \"typosquatting\" to bait unaware users to install it. The package contains a malicious payload that is executed upon usage, which means it is required to import the malicious package and use it in order to invoke the malicious code. The malicious code downloads an open-source cryptominer software called “xmrig”. Once the software is downloaded and extracted, it is executed as a subprocess, provided with the attacker’s wallet address to collect the funds."
+}

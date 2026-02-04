@@ -1,0 +1,4 @@
+{
+    "package": "aes44",
+    "overview": "aes44 is a malicious package. It leaks logins.json and key4.db (Firefox logins and encryption data) to a remote FTP server hosted on ftpupload.net."
+}

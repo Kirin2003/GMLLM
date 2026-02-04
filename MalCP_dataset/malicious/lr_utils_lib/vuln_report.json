@@ -1,0 +1,4 @@
+{
+    "package": "lr_utils_lib",
+    "overview": "lr-utils-lib is a malicious package. The malware targets macOS systems only and attempts to steal Google Cloud Platform credentials by using a list of predefined hashes, and sending them to a remote server."
+}

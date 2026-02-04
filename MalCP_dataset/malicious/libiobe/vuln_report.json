@@ -1,0 +1,4 @@
+{
+    "package": "libiobe",
+    "overview": "libiobe is a malicious package. This malicious package uses typosquatting and obfuscation techniques in order to trick users into downloading it, after which it will run malicious executables."
+}

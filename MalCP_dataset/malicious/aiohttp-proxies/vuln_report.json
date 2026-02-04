@@ -1,0 +1,4 @@
+{
+    "package": "aiohttp-proxies",
+    "overview": "aiohttp-proxies is a malicious package. This package decodes a malicious Windows binary embedded in the setup.py file and executes it upon install. It contains long base64-encoded strings that take up hundreds of line."
+}

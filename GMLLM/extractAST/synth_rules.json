@@ -1,0 +1,189 @@
+{
+  "behaviors": [
+    {
+      "name": "network_communication",
+      "why": "Initiating outbound network connections can be used to communicate with command-and-control servers or exfiltrate data.",
+      "rule": "lambda n: n.startswith(('socket.', 'requests.', 'urllib.', 'http.', 'ftplib.', 'smtplib.', 'telnetlib.'))"
+    },
+    {
+      "name": "network_data_reception",
+      "why": "Receiving data over the network may indicate downloading payloads or receiving commands from an attacker.",
+      "rule": "lambda n: n in ('socket.socket.recv', 'socket.socket.recvfrom', 'http.client.HTTPResponse.read', 'urllib.request.urlopen')"
+    },
+    {
+      "name": "dns_activity",
+      "why": "DNS queries can be used for covert communication or domain generation algorithms (DGAs) in malware.",
+      "rule": "lambda n: n.startswith(('socket.getaddrinfo', 'socket.gethostbyname', 'dnspython.', 'dns.resolver.'))"
+    },
+    {
+      "name": "data_exfil_http",
+      "why": "Sending data via HTTP(S) requests is a common method for exfiltrating sensitive information.",
+      "rule": "lambda n: n in ('requests.post', 'requests.put', 'urllib.request.Request', 'http.client.HTTPConnection.request')"
+    },
+    {
+      "name": "data_exfil_socket",
+      "why": "Raw socket usage to send data can bypass higher-level logging and enable stealthy exfiltration.",
+      "rule": "lambda n: n == 'socket.socket.send'"
+    },
+    {
+      "name": "data_exfil_scp",
+      "why": "Using SCP to transfer files may indicate unauthorized data movement to remote systems.",
+      "rule": "lambda n: n.startswith(('paramiko.SSHClient.', 'scp.SCPClient.'))"
+    },
+    {
+      "name": "data_exfil_webhook",
+      "why": "Webhooks are often abused to send stolen data to external services.",
+      "rule": "lambda n: n in ('requests.post', 'urllib.request.urlopen') and 'webhook' in n"
+    },
+    {
+      "name": "data_collection_stdin",
+      "why": "Reading from standard input could be used to gather user-provided sensitive data.",
+      "rule": "lambda n: n in ('sys.stdin.read', 'input', 'raw_input')"
+    },
+    {
+      "name": "lateral_movement_ssh",
+      "why": "SSH connections to other hosts may indicate attempts to move laterally within a network.",
+      "rule": "lambda n: n.startswith(('paramiko.SSHClient.connect', 'fabric.Connection.', 'ansible.', 'pexpect.spawn'))"
+    },
+    {
+      "name": "self_propagation_scp",
+      "why": "Copying files to remote systems via SCP can be a sign of worm-like self-propagation.",
+      "rule": "lambda n: n.startswith(('scp.SCPClient.put', 'paramiko.SSHClient.open_sftp'))"
+    },
+    {
+      "name": "fs_read",
+      "why": "Reading files from the filesystem may target sensitive data like credentials or configuration files.",
+      "rule": "lambda n: n in ('open', 'os.open', 'pathlib.Path.read_text', 'pathlib.Path.read_bytes')"
+    },
+    {
+      "name": "fs_write",
+      "why": "Writing files can be used to drop payloads, logs, or exfiltrated data.",
+      "rule": "lambda n: n in ('open', 'os.open', 'pathlib.Path.write_text', 'pathlib.Path.write_bytes')"
+    },
+    {
+      "name": "payload_dumping",
+      "why": "Writing large or encoded data to disk may indicate dumping of injected or downloaded payloads.",
+      "rule": "lambda n: n in ('open', 'os.write', 'tempfile.NamedTemporaryFile') and 'dump' in n"
+    },
+    {
+      "name": "fs_enum",
+      "why": "Enumerating files or directories helps attackers discover valuable data or system configurations.",
+      "rule": "lambda n: n.startswith(('os.listdir', 'os.walk', 'glob.glob', 'pathlib.Path.iterdir'))"
+    },
+    {
+      "name": "credential_access_bruteforce",
+      "why": "Repeated authentication attempts suggest brute-force attacks against accounts or services.",
+      "rule": "lambda n: n.startswith(('paramiko.Transport.auth_password', 'smtplib.SMTP.login', 'imaplib.IMAP4.login'))"
+    },
+    {
+      "name": "credential_access",
+      "why": "Accessing credential stores or memory can lead to theft of passwords or tokens.",
+      "rule": "lambda n: n.startswith(('keyring.get_password', 'win32cred.CredRead', 'os.environ.get')) and any(kw in n for kw in ['password', 'secret', 'token', 'credential'])"
+    },
+    {
+      "name": "command_execution",
+      "why": "Executing shell commands enables arbitrary code execution and system control.",
+      "rule": "lambda n: n in ('os.system', 'subprocess.run', 'subprocess.call', 'subprocess.Popen', 'os.popen')"
+    },
+    {
+      "name": "dynamic_code_exec",
+      "why": "Evaluating code at runtime can execute malicious payloads hidden in strings or network responses.",
+      "rule": "lambda n: n in ('eval', 'exec', 'compile')"
+    },
+    {
+      "name": "dynamic_code_load",
+      "why": "Loading code from external sources (e.g., files, URLs) can introduce untrusted or malicious logic.",
+      "rule": "lambda n: n.startswith(('importlib.util.spec_from_file_location', 'imp.load_source', 'types.ModuleType'))"
+    },
+    {
+      "name": "reflection_abuse",
+      "why": "Using reflection to access or modify internal objects can bypass security controls.",
+      "rule": "lambda n: n.startswith(('getattr', 'setattr', '__getattribute__', 'inspect.'))"
+    },
+    {
+      "name": "crypto_activity",
+      "why": "Cryptographic operations may be used to encrypt ransomware targets or decrypt embedded payloads.",
+      "rule": "lambda n: n.startswith(('cryptography.', 'Crypto.', 'pycryptodome.', 'hashlib.', 'hmac.'))"
+    },
+    {
+      "name": "deobfuscation",
+      "why": "Decoding or decompressing data may reveal hidden malicious code or configuration.",
+      "rule": "lambda n: n.startswith(('base64.b64decode', 'zlib.decompress', 'marshal.loads', 'codecs.decode'))"
+    },
+    {
+      "name": "obfuscation_dynamic_config",
+      "why": "Dynamically generating or modifying configuration can hide malicious behavior or C2 addresses.",
+      "rule": "lambda n: n.startswith(('json.loads', 'yaml.load', 'configparser.ConfigParser.read'))"
+    },
+    {
+      "name": "system_recon",
+      "why": "Gathering system information helps attackers understand the environment for further exploitation.",
+      "rule": "lambda n: n.startswith(('platform.', 'os.uname', 'socket.gethostname', 'psutil.', 'sys.platform'))"
+    },
+    {
+      "name": "process_recon",
+      "why": "Enumerating running processes can identify security tools or high-value targets.",
+      "rule": "lambda n: n.startswith(('psutil.process_iter', 'os.popen', 'subprocess.check_output')) and any(kw in n for kw in ['ps', 'tasklist', 'proc'])"
+    },
+    {
+      "name": "permission_manipulation",
+      "why": "Changing file or process permissions can escalate privileges or maintain persistence.",
+      "rule": "lambda n: n.startswith(('os.chmod', 'os.chown', 'win32security.', 'subprocess.run')) and 'chmod' in n"
+    },
+    {
+      "name": "defense_evasion_daemon",
+      "why": "Running as a background daemon can help malware avoid detection and persist across reboots.",
+      "rule": "lambda n: n.startswith(('os.fork', 'multiprocessing.Process', 'daemon.'))"
+    },
+    {
+      "name": "defense_evasion",
+      "why": "Techniques to hide or disguise malicious activity can bypass security monitoring.",
+      "rule": "lambda n: n.startswith(('ctypes.windll.kernel32.SetConsoleTitle', 'os.rename', 'time.sleep'))"
+    },
+    {
+      "name": "defense_evasion_gui",
+      "why": "Manipulating GUI elements can hide windows or mimic legitimate applications.",
+      "rule": "lambda n: n.startswith(('tkinter.', 'PyQt5.', 'wx.', 'ctypes.windll.user32.ShowWindow'))"
+    },
+    {
+      "name": "persistence_registry",
+      "why": "Modifying registry keys on Windows ensures malware runs at startup.",
+      "rule": "lambda n: n.startswith(('winreg.', 'win32api.RegSetValue', '_winreg.'))"
+    },
+    {
+      "name": "persistence_cron",
+      "why": "Adding cron jobs on Unix-like systems enables recurring execution of malicious code.",
+      "rule": "lambda n: n in ('subprocess.run', 'os.system') and 'crontab' in n"
+    },
+    {
+      "name": "keylogging",
+      "why": "Capturing keystrokes can steal credentials, messages, and other sensitive input.",
+      "rule": "lambda n: n.startswith(('pynput.keyboard.', 'keyboard.on_press', 'pyxhook.'))"
+    },
+    {
+      "name": "user_input_prompt",
+      "why": "Prompting for user input may be used to phish credentials or trick users into enabling malicious actions.",
+      "rule": "lambda n: n in ('input', 'raw_input', 'getpass.getpass')"
+    },
+    {
+      "name": "clipboard_abuse",
+      "why": "Reading or modifying the clipboard can steal crypto wallet addresses or inject malicious content.",
+      "rule": "lambda n: n.startswith(('pyperclip.', 'tkinter.Tk.clipboard_get', 'win32clipboard.'))"
+    },
+    {
+      "name": "screenshot",
+      "why": "Taking screenshots can capture sensitive visual information like open documents or 2FA codes.",
+      "rule": "lambda n: n.startswith(('PIL.ImageGrab.grab', 'pyautogui.screenshot', 'mss.mss.grab'))"
+    },
+    {
+      "name": "gui_abuse",
+      "why": "Abusing GUI automation can simulate user actions or extract on-screen data.",
+      "rule": "lambda n: n.startswith(('pyautogui.', 'selenium.', 'tkinter.', 'PyQt5.'))"
+    },
+    {
+      "name": "install_hook",
+      "why": "Installing hooks (e.g., import hooks, event hooks) can intercept or modify program behavior.",
+      "rule": "lambda n: n.startswith(('sys.meta_path.append', 'atexit.register', 'signal.signal'))"
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+{
+    "package": "aiohttp-socks4",
+    "overview": "aiohttp-socks4 is a malicious package. It contains malicious EXEs packaged as large base64-strings. These executables are Remote Access Trojans (RATs) capable of equipping attackers with advanced surveillance and remote control capabilities over the infected system."
+}

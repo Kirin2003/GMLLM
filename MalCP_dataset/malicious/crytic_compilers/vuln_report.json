@@ -1,0 +1,4 @@
+{
+    "package": "crytic_compilers",
+    "overview": "crytic-compilers is a malicious package. This package uses \"typosquatting\" to bait unaware users to install it. It contains an information stealer called Lumma (aka LummaC2) and targets mainly Windows machines."
+}

@@ -1,0 +1,4 @@
+{
+    "package": "pycrypterexe",
+    "overview": "pycrypterexe is a malicious package. This package executes a python script written to connect to a URL that may contain malicious code."
+}

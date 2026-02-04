@@ -1,0 +1,4 @@
+{
+    "package": "quantiumbase",
+    "overview": "quantiumbase is a malicious package. This package contains encoded malicious code which \"retrieves data from an attacker-controlled URL and attempts to execute it on the host machine\"."
+}

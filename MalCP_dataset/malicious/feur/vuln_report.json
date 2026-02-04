@@ -1,0 +1,4 @@
+{
+    "package": "feur",
+    "overview": "feur is a malicious package. Once installed, the package executes a 'setup.py' file containing two base64-encoded strings. The first one establishes a reverse shell connection to an Ngrok tunnel. The second encodes a Windows Executable (EXE) file, which is a Remote Access Trojan (RAT) that runs immediately after the package installation."
+}

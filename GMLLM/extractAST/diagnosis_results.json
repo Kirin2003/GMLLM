@@ -1,0 +1,117 @@
+{
+  "2023-07": {
+    "sample_counts": {
+      "benign": 5,
+      "malicious": 5
+    },
+    "confusion_matrix": {
+      "tn": 5,
+      "fp": 0,
+      "fn": 5,
+      "tp": 0
+    },
+    "metrics": {
+      "benign_precision": 0.5,
+      "benign_recall": 1.0,
+      "malicious_precision": 0.0,
+      "malicious_recall": 0.0,
+      "malicious_f1": 0.0
+    },
+    "prob_distribution": {
+      "benign_mean_p_benign": 0.9999771118164062,
+      "malicious_mean_p_benign": 0.8314002156257629
+    }
+  },
+  "2023-09": {
+    "sample_counts": {
+      "benign": 5,
+      "malicious": 5
+    },
+    "confusion_matrix": {
+      "tn": 5,
+      "fp": 0,
+      "fn": 5,
+      "tp": 0
+    },
+    "metrics": {
+      "benign_precision": 0.5,
+      "benign_recall": 1.0,
+      "malicious_precision": 0.0,
+      "malicious_recall": 0.0,
+      "malicious_f1": 0.0
+    },
+    "prob_distribution": {
+      "benign_mean_p_benign": 0.9456561207771301,
+      "malicious_mean_p_benign": 0.9940401911735535
+    }
+  },
+  "2023-11": {
+    "sample_counts": {
+      "benign": 5,
+      "malicious": 5
+    },
+    "confusion_matrix": {
+      "tn": 5,
+      "fp": 0,
+      "fn": 5,
+      "tp": 0
+    },
+    "metrics": {
+      "benign_precision": 0.5,
+      "benign_recall": 1.0,
+      "malicious_precision": 0.0,
+      "malicious_recall": 0.0,
+      "malicious_f1": 0.0
+    },
+    "prob_distribution": {
+      "benign_mean_p_benign": 0.9456591606140137,
+      "malicious_mean_p_benign": 0.9033997654914856
+    }
+  },
+  "2024-01": {
+    "sample_counts": {
+      "benign": 5,
+      "malicious": 5
+    },
+    "confusion_matrix": {
+      "tn": 5,
+      "fp": 0,
+      "fn": 5,
+      "tp": 0
+    },
+    "metrics": {
+      "benign_precision": 0.5,
+      "benign_recall": 1.0,
+      "malicious_precision": 0.0,
+      "malicious_recall": 0.0,
+      "malicious_f1": 0.0
+    },
+    "prob_distribution": {
+      "benign_mean_p_benign": 0.9456545114517212,
+      "malicious_mean_p_benign": 0.9996390342712402
+    }
+  },
+  "2024-03": {
+    "sample_counts": {
+      "benign": 61,
+      "malicious": 61
+    },
+    "confusion_matrix": {
+      "tn": 60,
+      "fp": 1,
+      "fn": 61,
+      "tp": 0
+    },
+    "metrics": {
+      "benign_precision": 0.49586776859504134,
+      "benign_recall": 0.9836065573770492,
+      "malicious_precision": 0.0,
+      "malicious_recall": 0.0,
+      "malicious_f1": 0.0
+    },
+    "prob_distribution": {
+      "benign_mean_p_benign": 0.9176242351531982,
+      "malicious_mean_p_benign": 0.9858531355857849
+    }
+  }
+}

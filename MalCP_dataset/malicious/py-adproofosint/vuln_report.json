@@ -1,0 +1,4 @@
+{
+    "package": "py-adproofosint",
+    "overview": "py-adproofosint is a malicious package. This package includes in its setup.py a malicious code, which is executed once downloading the package and exposes the victim to spyware and information-stealing malware."
+}

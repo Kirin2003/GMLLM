@@ -1,0 +1,4 @@
+{
+    "package": "NP6HelperHttper",
+    "overview": "NP6HelperHttper is a malicious package. This package uses DLL sideloading, a well-documented technique that malicious actors use to execute code without attracting the attention of security monitoring tools."
+}

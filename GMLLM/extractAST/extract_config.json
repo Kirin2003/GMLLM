@@ -1,0 +1,19 @@
+{
+  "paths": {
+    "src_dir": "../MalCP_dataset/benign",
+    "out_dir": "../output",
+    "synth_rules_out": "synth_rules.json",
+    "cache_file": "detector_cache.json"
+  },
+  "llm": {
+    "provider": "openai",
+    "model_name": "qwen",
+    "temperature": 0.0,
+    "max_retries": 3,
+    "timeout_s": 30.0,
+    "auto_synthesize": false
+  },
+  "detector": {
+    "use_rule_fallback": true
+  }
+}

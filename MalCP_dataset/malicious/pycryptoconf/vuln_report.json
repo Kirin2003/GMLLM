@@ -1,0 +1,4 @@
+{
+    "package": "pycryptoconf",
+    "overview": "pycryptoconf is a malicious package. This package contains an encoded DLL file test.py that sends requests to a malicious host. Upon receiving the request, the server sends back a Windows executable file which will be executed into memory."
+}

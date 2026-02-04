@@ -1,0 +1,4 @@
+{
+    "package": "pycodeestyle",
+    "overview": "pycodeestyle is a malicious package. This package contains a malicious code that downloads a malicious browser extension that replaces copied Crypto wallet addresses with hard-coded wallet addresses of the attacker."
+}

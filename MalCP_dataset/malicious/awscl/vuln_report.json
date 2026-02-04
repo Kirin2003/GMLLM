@@ -1,0 +1,4 @@
+{
+    "package": "awscl",
+    "overview": "awscl is a malicious package. It attempts typosquatting popular packages. The malicious script is base64 obfuscated (located in __init__.py file) and tries to steal the current username, platform and IP information and send them to a remote host."
+}

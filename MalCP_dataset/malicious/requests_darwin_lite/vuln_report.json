@@ -1,0 +1,4 @@
+{
+    "package": "requests_darwin_lite",
+    "overview": "requests-darwin-lite is a malicious package. This package contains a malicious code in it's setup.py through the PyInstall function, which contains a malicious Go binary."
+}

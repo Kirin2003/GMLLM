@@ -1,0 +1,4 @@
+{
+    "package": "pyobfpremium",
+    "overview": "Pyobfpremium is a malicious package. This package contains a script that is activated upon installation which receives and executes code from an external source. This malware, named “BlazeStealer, runs a Discord bot which effectively provides the attacker full control of the target’s system, allowing them to perform a myriad of harmful actions on the victim's machine.\n\nIoC:"
+}

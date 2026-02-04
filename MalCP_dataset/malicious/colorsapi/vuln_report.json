@@ -1,0 +1,4 @@
+{
+    "package": "colorsapi",
+    "overview": "colorsapi is a malicious package. This is a \"dependency confusion\" package, which means the package name is based on existing repositories, namespaces, or components, it aims to trick users into downloading the package which contains a malicious code.\n\nThe malicious package injects a Discord malware into Windows machines, by injecting itself into the registry. The attack is initiated by downloading a malicious .png file, after which it downloads and executes a malicious Python script. The malicious code is heavily obfuscated and the attack is multi-staged."
+}

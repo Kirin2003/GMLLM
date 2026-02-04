@@ -1,0 +1,4 @@
+{
+    "package": "asyncio-box",
+    "overview": "asyncio-box is a malicious package. This package exfiltrates sensitive information and sends it to a remote host."
+}

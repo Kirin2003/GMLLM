@@ -1,0 +1,4 @@
+{
+    "package": "importantpackage",
+    "overview": "importantpackage is a malicious package. The package was found to create a reverse shell to a fixed HTTP address on the compromised machine, giving the attacker full control over an infected machine. In order to avoid detection, It uses the Fastly CDN to disguise its communication with the C2 server, and takes advantage of the TrevorC2 framework to implement a masked command and control client."
+}

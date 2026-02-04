@@ -1,0 +1,4 @@
+{
+    "package": "apidev-coop",
+    "overview": "apidev-coop is a one of 10 malicious packages that use typosquatting to bait unknowing users to install them. These packages, which carry similar names to an original package, offer all the functionality of their original, but also include malicious code that collected information on infected hosts, such as the username of the user who installed the package, and the user's computer hostname. It is also possible that the packages collected SSH key information.\n\nThe collected data, which looked like Y:urllib-1.21.1 admin testmachine, was uploaded to a Chinese IP address at 121.42.217.44:8080.\n\nThis is especially dangerous in production runtime environments, where environment variables tend to consist of keys, passwords, tokens and other secrets.\n\nOn September 15th, 2017 pypi deprecated all malicious typosquatting libraries from this list.\n\nThe full list of packages are:"
+}

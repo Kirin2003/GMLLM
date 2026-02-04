@@ -1,0 +1,4 @@
+{
+    "package": "free-net-vpn",
+    "overview": "Free-net-vpn is a malicious package. This package contains a malicious code in its setup.py file that steals the user's credentials and uploads them to the attacker's website."
+}

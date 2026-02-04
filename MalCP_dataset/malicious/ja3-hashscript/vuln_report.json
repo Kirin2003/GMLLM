@@ -1,0 +1,4 @@
+{
+    "package": "ja3-hashscript",
+    "overview": "ja3-hashscript is a malicious package. This package contains malware that exfiltrates sensitive information and particularly crypto wallet data from the target machines through multiple Command and Control (C2) servers."
+}

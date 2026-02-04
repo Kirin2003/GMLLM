@@ -1,0 +1,4 @@
+{
+    "package": "pipstyle",
+    "overview": "pipstyle is a malicious package. This is a malicious package, which contains a copy of the W4SP Stealer malware in utils.py. The malicious code cannot be executed but it could be invoked if this package were called by another one due to dependency confusion."
+}

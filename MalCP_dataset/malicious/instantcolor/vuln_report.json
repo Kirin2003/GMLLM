@@ -1,0 +1,4 @@
+{
+    "package": "instantcolor",
+    "overview": "instantcolor is a malicious package. This package contains code that downloads and executes malicious code from a remote URL."
+}
