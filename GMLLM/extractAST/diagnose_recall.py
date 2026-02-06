@@ -110,7 +110,7 @@ def main():
     benign_out = "/Data2/hxq/datasets/incremental_packages_subset/benign_call_processed"
     malicious_out = "/Data2/hxq/datasets/incremental_packages_subset/malicious_call_processed"
 
-    target_months = ["2023-07", "2023-09", "2023-11", "2024-01", "2024-03"]
+    target_months = ["2023-08"]
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # 输出路径

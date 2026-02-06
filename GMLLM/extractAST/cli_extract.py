@@ -278,37 +278,46 @@ def batch_extract_call_graphs(base_path: Path | str, model_name: str = "qwen3-ma
 
 
 if __name__ == "__main__":
-    batch_extract_call_graphs(
-        base_path="/Data2/hxq/datasets/incremental_packages_subset/",
-        model_name="qwen3-max",
-    )
-    # extract_call_graph(src_path="/Data2/hxq/datasets/incremental_packages/2022-01/malicious/AadhaarCrypt-1.0",
-    #                    out_path="/Data2/hxq/datasets/incremental_packages/2022-01/malicious/AadhaarCrypt-1.0",
+    # batch_extract_call_graphs(
+    #     base_path="/Data2/hxq/datasets/incremental_packages_subset/",
+    #     model_name="qwen3-max",
+    # )
+    # extract_call_graph(src_path="/Data2/hxq/datasets/incremental_packages_subset/malicious/2023-08/tencentcloud-python-sdk-3.0.959",
+    #                    out_path="/Data2/hxq/datasets/incremental_packages_subset/malicious/2023-08/tencentcloud-python-sdk-3.0.959",
     #                    model_name="qwen3-max")
-    # model_name = "qwen3-max"
-    # pkg_path = "/Data2/hxq/datasets/incremental_packages_subset/malicious/2023-07/requests-toolbelt-v2-0.0.1/"
-    # log_file_path = Path("/Data2/hxq/GMLLM/GMLLM/extractAST/batch_extract.log")
-    # log_file_path.parent.mkdir(parents=True, exist_ok=True)
+    model_name = "qwen3-max"
+    pkg_path = "/Data2/hxq/datasets/incremental_packages_subset/malicious/2023-08/tencentcloud-python-sdk-3.0.959"
+    log_file_path = Path("/Data2/hxq/GMLLM/GMLLM/extractAST/batch_extract.log")
+    log_file_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # # 清空日志文件
-    # log_file_path.write_text("", encoding="utf-8")
+    # 清空日志文件
+    log_file_path.write_text("", encoding="utf-8")
 
-    # log("=" * 60)
-    # log("开始批量提取 Call Graph")
-    # log(f"Model: {model_name}")
-    # log("=" * 60)
+    log("=" * 60)
+    log("开始批量提取 Call Graph")
+    log(f"Model: {model_name}")
+    log("=" * 60)
 
-    # # 只合成一次规则，复用于所有包
-    # log("\n[1/2] 正在合成规则...")
-    # detector = LLMBehaviorDetector(
-    #     model_name=model_name,
-    #     use_rule_fallback=True,
-    # )
+    # 只合成一次规则，复用于所有包
+    log("\n[1/2] 正在合成规则...")
+    detector = LLMBehaviorDetector(
+        model_name=model_name,
+        use_rule_fallback=True,
+    )
+
+    try:
+        # obj = detector.synthesize_rules()
+        synth_path = Path("/Data2/hxq/GMLLM/GMLLM/extractAST/synth_rules.json")
+        # synth_path.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
+        detector.load_synth_rules(synth_path)
+        log(f"[ok] 规则合成成功，保存在 {synth_path}")
+    except Exception as e:
+        log(f"[warn] 规则合成失败，将使用 fallback 规则: {e}")
     
-    # log("\n[2/2] 开始处理所有包...")
-    # overall_start = time.time()
-    # extract_call_graph(
-    #     src_path=pkg_path,
-    #     out_path=pkg_path,
-    #     detector=detector,
-    # )
+    log("\n[2/2] 开始处理所有包...")
+    overall_start = time.time()
+    extract_call_graph(
+        src_path=pkg_path,
+        out_path=pkg_path,
+        detector=detector,
+    )

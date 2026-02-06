@@ -3,9 +3,50 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 
 
+def plot_complete_metrics_curve(val_period_results: dict, future_test_results: dict, results_dir: Path):
+    """
+    绘制完整的F1/Precision/Recall曲线对比图（单张图）。
+
+    Args:
+        val_period_results: 验证期结果 {'month': [...], 'f1': [...], 'precision': [...], 'recall': [...]}
+        future_test_results: 未来测试结果 {'month': [...], 'f1': [...], 'precision': [...], 'recall': [...]}
+        results_dir: 保存图片的目录
+    """
+    # 合并所有月份和指标
+    all_months = val_period_results['month'] + future_test_results['month']
+    all_f1 = val_period_results['f1'] + future_test_results['f1']
+    all_prec = val_period_results['precision'] + future_test_results['precision']
+    all_recall = val_period_results['recall'] + future_test_results['recall']
+
+    fig, ax = plt.subplots(figsize=(14, 6))
+
+    ax.plot(all_months, all_f1, 'b-o', label='F1', markersize=4, linewidth=1.5)
+    ax.plot(all_months, all_prec, 'g-s', label='Precision', markersize=4, linewidth=1.5)
+    ax.plot(all_months, all_recall, 'r--^', label='Recall', markersize=4, linewidth=1.5)
+
+    # 标注训练/验证期和未来测试期的分界线
+    val_len = len(val_period_results['month'])
+    if val_len > 0:
+        ax.axvline(x=val_len - 0.5, color='purple', linestyle='--', alpha=0.7, linewidth=2,
+                   label='Train/Val End')
+
+    ax.set_title('Complete F1/Precision/Recall Curves', fontsize=14)
+    ax.set_xlabel('Month', fontsize=12)
+    ax.set_ylabel('Score', fontsize=12)
+    ax.legend(loc='lower right', fontsize=10)
+    ax.tick_params(axis='x', rotation=45)
+    ax.set_ylim(0, 1.05)
+    ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(results_dir / 'complete_metrics_curve.png', dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"  - complete_metrics_curve.png")
+
+
 def plot_monthly_metrics(val_period_results: dict, future_test_results: dict, results_dir: Path):
     """
-    绘制按月测试指标折线图。
+    绘制按月测试指标折线图（4个子图）。
 
     Args:
         val_period_results: 验证期结果 {'month': [...], 'f1': [...], 'precision': [...], 'recall': [...]}
@@ -85,5 +126,5 @@ if __name__ == "__main__":
     with open(results_dir / "future_test_results.json", 'r') as f:
         future_test_results = json.load(f)
 
-    plot_monthly_metrics(val_period_results, future_test_results, results_dir)
+    plot_complete_metrics_curve(val_period_results, future_test_results, results_dir)
     print(f"Plots saved to {results_dir}")
