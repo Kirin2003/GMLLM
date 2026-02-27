@@ -5,7 +5,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from pathlib import Path
 import argparse
-from torch.utils.data import random_split
 from torch_geometric.data import Data
 from torch_geometric.loader import DataLoader
 from torch_geometric.nn import GCNConv, global_mean_pool
@@ -18,6 +17,7 @@ import numpy as np
 import time
 from month_utils import generate_month_range
 from plot_results import plot_monthly_metrics
+from data_util import split_train_val_test
 
 def set_seed(seed):
     random.seed(seed)
@@ -108,26 +108,10 @@ def validate(model, loader, device):
 
 
 if __name__ == "__main__":
-    # parser = argparse.ArgumentParser(description="Train GNN on processed call graphs.")
-    # parser.add_argument("--vocab-dir", required=True,
-    #                     help="Directory containing name2idx.json/type2idx.json/edge_type2idx.json/behavior2idx.json")
-    # parser.add_argument("--benign-root", required=True, help="Root directory of benign_call (<root>/*/call_graph.json)")
-    # parser.add_argument("--malicious-root", required=True, help="Root directory of malicious_call")
-    # parser.add_argument("--benign-out", required=True, help="Processed output dir for benign graphs")
-    # parser.add_argument("--malicious-out", required=True, help="Processed output dir for malicious graphs")
-    # parser.add_argument("--epochs", type=int, default=60)
-    # parser.add_argument("--batch-size", type=int, default=128)
-    # parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
-    # args = parser.parse_args()
 
-    # SEED = 42
-    # set_seed(SEED)
-
-    # name2idx = load_dict(str(Path(args.vocab_dir) / "name2idx.json"))
-    # type2idx = load_dict(str(Path(args.vocab_dir) / "type2idx.json"))
-    # behavior2idx = load_dict(str(Path(args.vocab_dir) / "behavior2idx.json"))
-    # edge_type2idx = load_dict(str(Path(args.vocab_dir) / "edge_type2idx.json"))
-
+    # =============================================================================
+    # 阶段1: 配置和初始化
+    # =============================================================================
     vocab_dir = "/Data2/hxq/datasets/incremental_packages_subset/vocab"
     benign_root = "/Data2/hxq/datasets/incremental_packages_subset/benign"
     malicious_root = "/Data2/hxq/datasets/incremental_packages_subset/malicious"
@@ -140,15 +124,20 @@ if __name__ == "__main__":
     SEED = 42
     set_seed(SEED)
 
-    
+    os.makedirs("models", exist_ok=True)
 
+    # =============================================================================
+    # 阶段2: 加载词汇表
+    # =============================================================================
     name2idx = load_dict(str(Path(vocab_dir) / "name2idx.json"))
     type2idx = load_dict(str(Path(vocab_dir) / "type2idx.json"))
     behavior2idx = load_dict(str(Path(vocab_dir) / "behavior2idx.json"))
     edge_type2idx = load_dict(str(Path(vocab_dir) / "edge_type2idx.json"))
     print('Load vocab done.')
 
-    # 增量学习数据集构建
+    # =============================================================================
+    # 阶段3: 构建数据集 (按月份循环)
+    # =============================================================================
     # 2022-01 ~ 2023-02: 80% 训练, 10% 验证, 10% 测试
     # 2023-03 ~ 2024-12: 100% 按月测试
 
@@ -176,19 +165,10 @@ if __name__ == "__main__":
 
         if month <= '2023-02':
             # 训练阶段: 80% 训练, 10% 验证, 10% 测试
-            n_train = int(train_ratio * len(normal_dataset))
-            n_val = int(val_ratio * len(normal_dataset))
-            normal_train, normal_val, normal_test = random_split(
-                normal_dataset, [n_train, n_val, len(normal_dataset) - n_train - n_val],
-                generator=torch.Generator().manual_seed(42)
-            )
-
-            m_train = int(train_ratio * len(malicious_dataset))
-            m_val = int(val_ratio * len(malicious_dataset))
-            malicious_train, malicious_val, malicious_test = random_split(
-                malicious_dataset, [m_train, m_val, len(malicious_dataset) - m_train - m_val],
-                generator=torch.Generator().manual_seed(42)
-            )
+            (normal_train, normal_val, normal_test,
+             malicious_train, malicious_val, malicious_test) = split_train_val_test(
+                 normal_dataset, malicious_dataset, train_ratio, val_ratio
+             )
 
             # 累积训练集和验证集
             train_dataset = ConcatDataset([train_dataset, normal_train, malicious_train]) if train_dataset else ConcatDataset([normal_train, malicious_train])
@@ -222,6 +202,9 @@ if __name__ == "__main__":
     print(f"Val samples: {len(val_dataset)}")
     print(f"Test months: {len(test_loaders)} ({list(test_loaders.keys())[0]} ~ {list(test_loaders.keys())[-1]})")
 
+    # =============================================================================
+    # 阶段4: 初始化模型、优化器、损失函数
+    # =============================================================================
     device = torch.device(device)
     model = GCNWithBehavior(
         name_vocab_size=len(name2idx),
@@ -234,6 +217,9 @@ if __name__ == "__main__":
     best_val_f1 = 0
     history = {'train_loss': [], 'train_acc': [], 'val_f1': [], 'val_acc': [], 'val_precision': [], 'val_recall': []}
 
+    # =============================================================================
+    # 阶段5: 训练模型
+    # =============================================================================
     train_start = time.time()
     print(f"\nTraining started at {time.strftime('%Y-%m-%d %H:%M:%S')}")
 
@@ -254,16 +240,18 @@ if __name__ == "__main__":
 
         if val_f1 > best_val_f1:
             best_val_f1 = val_f1
-            torch.save(model.state_dict(), str(Path(malicious_out).parent / "best_model.pt"))
+            torch.save(model.state_dict(), "models/base_model.pt")
 
     train_time = time.time() - train_start
     print(f"\nTraining completed at {time.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Training done in {train_time:.2f}s ({train_time/60:.2f} min). Best Val F1: {best_val_f1:.4f}")
 
+    # =============================================================================
+    # 阶段6: 按月测试
+    # =============================================================================
     # 加载最佳模型进行测试
-    model.load_state_dict(torch.load(str(Path(malicious_out).parent / "best_model.pt"), map_location=device))
+    model.load_state_dict(torch.load("models/base_model.pt", map_location=device))
 
-    # 按月测试
     val_period_results = {'month': [], 'f1': [], 'acc': [], 'precision': [], 'recall': []}
     future_test_results = {'month': [], 'f1': [], 'acc': [], 'precision': [], 'recall': []}
 
@@ -304,7 +292,9 @@ if __name__ == "__main__":
         avg_recall = sum(future_test_results['recall']) / len(future_test_results['recall'])
         print(f"Average | F1: {avg_f1:.4f} | Acc: {avg_acc:.4f} | Precision: {avg_prec:.4f} | Recall: {avg_recall:.4f}")
 
-    # 保存测试结果
+    # =============================================================================
+    # 阶段7: 保存测试结果
+    # =============================================================================
     results_dir = Path(malicious_out).parent
     with open(results_dir / "val_period_test_results.json", 'w') as f:
         json.dump(val_period_results, f, indent=2)
@@ -325,5 +315,7 @@ if __name__ == "__main__":
     print("  - future_test_results.json")
     print("  - monthly_test_results.json")
 
-    # 画图
+    # =============================================================================
+    # 阶段8: 画图
+    # =============================================================================
     plot_monthly_metrics(val_period_results, future_test_results, results_dir)
