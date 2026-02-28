@@ -295,7 +295,8 @@ if __name__ == "__main__":
     # =============================================================================
     # 阶段7: 保存测试结果
     # =============================================================================
-    results_dir = Path(malicious_out).parent
+    results_dir = Path("./results")
+    os.makedirs(results_dir, exist_ok=True)
     with open(results_dir / "val_period_test_results.json", 'w') as f:
         json.dump(val_period_results, f, indent=2)
     with open(results_dir / "future_test_results.json", 'w') as f:

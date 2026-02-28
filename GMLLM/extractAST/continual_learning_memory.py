@@ -499,13 +499,31 @@ def run_continual_learning_unk(
 
     print_memory_stats(memory_samples)
 
+    future_month_result = {'month': [], 'f1': [], 'acc': [], 'precision': [], 'recall': []}
+    seen_months_results = {'month': [], 'f1': [], 'acc': [], 'precision': [], 'recall': []}
+
+    # 评估：基础月份的下一个月，即2023-03（用基础模型评估）
+    first_future_month = "2023-03"
+
+    if first_future_month in test_datasets:
+        log.log(f"\n--- Evaluating base model on {first_future_month} (before incremental learning) ---")
+        first_future_loader = build_test_loaders({first_future_month: test_datasets[first_future_month]}, batch_size)
+        first_loader = first_future_loader[first_future_month]
+        metrics = validate(model, first_loader, device)
+        f1, acc, recall, precision = metrics
+        log.log(f"  {first_future_month}: F1={f1:.4f}, Acc={acc:.4f}")
+
+        future_month_result['month'].append(first_future_month)
+        future_month_result['f1'].append(f1)
+        future_month_result['acc'].append(acc)
+        future_month_result['precision'].append(precision)
+        future_month_result['recall'].append(recall)
+
     # 5. 增量学习
     log.log("\n" + "="*60)
     log.log("Phase 3: Incremental Learning with UNK Mapping")
     log.log("="*60)
 
-    seen_months_results = {'month': [], 'f1': [], 'acc': [], 'precision': [], 'recall': []}
-    future_month_result = {'month': [], 'f1': [], 'acc': [], 'precision': [], 'recall': []}
 
     for month in generate_month_range(inc_start, inc_end):
         log.log(f"\n--- Month: {month} ---")
