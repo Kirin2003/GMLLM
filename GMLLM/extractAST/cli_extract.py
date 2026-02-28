@@ -7,6 +7,8 @@ from graph_builder import ProjectGraphBuilder
 from llm_detector import LLMBehaviorDetector
 from exporter import save_call_graph
 from month_utils import generate_month_range
+from logger_utils import Logger
+log = Logger("batch_extract.log")
 
 def extract_call_graph(src_path: Path | str, out_path: Path | str,
                        model_name: str = "gpt-4o",
@@ -167,17 +169,6 @@ def main():
     save_call_graph(graph, args.out)
     print(f"[ok] wrote {args.out/'call_graph.json'} with {len(graph['nodes'])} nodes and {len(graph['links'])} links.")
 import time
-from datetime import datetime
-
-LOG_FILE = Path("../log/batch_extract.log")
-
-def log(msg: str):
-    """输出日志到文件和控制台"""
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    log_msg = f"[{timestamp}] {msg}"
-    print(log_msg)
-    with open(LOG_FILE, "a", encoding="utf-8") as f:
-        f.write(log_msg + "\n")
 
 
 def batch_extract_call_graphs(base_path: Path | str, model_name: str = "qwen3-max"):
@@ -190,20 +181,15 @@ def batch_extract_call_graphs(base_path: Path | str, model_name: str = "qwen3-ma
         model_name: LLM模型名称
     """
     base_path = Path(base_path)
-    log_file_path = Path("/Data2/hxq/GMLLM/GMLLM/extractAST/batch_extract.log")
-    log_file_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # 清空日志文件
-    log_file_path.write_text("", encoding="utf-8")
-
-    log("=" * 60)
-    log("开始批量提取 Call Graph")
-    log(f"Base path: {base_path}")
-    log(f"Model: {model_name}")
-    log("=" * 60)
+    log.log("=" * 60)
+    log.log("开始批量提取 Call Graph")
+    log.log(f"Base path: {base_path}")
+    log.log(f"Model: {model_name}")
+    log.log("=" * 60)
 
     # 只合成一次规则，复用于所有包
-    log("\n[1/2] 正在合成规则...")
+    log.log("\n[1/2] 正在合成规则...")
     detector = LLMBehaviorDetector(
         model_name=model_name,
         use_rule_fallback=True,
@@ -213,11 +199,11 @@ def batch_extract_call_graphs(base_path: Path | str, model_name: str = "qwen3-ma
         synth_path = Path("/Data2/hxq/GMLLM/GMLLM/extractAST/synth_rules.json")
         # synth_path.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
         detector.load_synth_rules(synth_path)
-        log(f"[ok] 规则合成成功，保存在 {synth_path}")
+        log.log(f"[ok] 规则合成成功，保存在 {synth_path}")
     except Exception as e:
-        log(f"[warn] 规则合成失败，将使用 fallback 规则: {e}")
+        log.log(f"[warn] 规则合成失败，将使用 fallback 规则: {e}")
 
-    log("\n[2/2] 开始处理所有包...")
+    log.log("\n[2/2] 开始处理所有包...")
     overall_start = time.time()
     total_packages = 0
 
@@ -226,9 +212,9 @@ def batch_extract_call_graphs(base_path: Path | str, model_name: str = "qwen3-ma
     for pkg_type in pkg_types:
         type_dir = base_path / pkg_type
 
-        log(f"\n{'='*60}")
-        log(f"正在处理 {pkg_type} 包")
-        log("=" * 60)
+        log.log(f"\n{'='*60}")
+        log.log(f"正在处理 {pkg_type} 包")
+        log.log("=" * 60)
 
         # 获取该类型下的所有月份目录
         months = generate_month_range("2022-01", "2024-12")
@@ -237,10 +223,10 @@ def batch_extract_call_graphs(base_path: Path | str, model_name: str = "qwen3-ma
             month_dir = type_dir / month_str
 
             if not month_dir.exists():
-                log(f"  {month_str}: 目录不存在，跳过")
+                log.log(f"  {month_str}: 目录不存在，跳过")
                 continue
 
-            log(f"\n  正在处理 {month_str} 月的 {pkg_type} 包")
+            log.log(f"\n  正在处理 {month_str} 月的 {pkg_type} 包")
 
             # 获取所有包目录
             packages = [p for p in month_dir.iterdir() if p.is_dir()]
@@ -249,7 +235,7 @@ def batch_extract_call_graphs(base_path: Path | str, model_name: str = "qwen3-ma
 
             for pkg in packages:
                 pkg_start = time.time()
-                log(f"    处理包: {pkg.name}")
+                log.log(f"    处理包: {pkg.name}")
 
                 out_path = pkg
                 try:
@@ -259,22 +245,22 @@ def batch_extract_call_graphs(base_path: Path | str, model_name: str = "qwen3-ma
                         out_path=out_path,
                         detector=detector,
                     )
-                    log(f"    完成: {pkg.name} (耗时: {time.time() - pkg_start:.1f}s)")
+                    log.log(f"    完成: {pkg.name} (耗时: {time.time() - pkg_start:.1f}s)")
                 except Exception as e:
-                    log(f"    失败: {pkg.name} - {e}")
+                    log.log(f"    失败: {pkg.name} - {e}")
 
                 month_pkg_count += 1
                 total_packages += 1
 
             month_time = time.time() - month_start
-            log(f"\n  {month_str} 月 {pkg_type} 包处理完成: {month_pkg_count} 个包, 耗时: {month_time:.1f}s")
+            log.log(f"\n  {month_str} 月 {pkg_type} 包处理完成: {month_pkg_count} 个包, 耗时: {month_time:.1f}s")
 
     total_time = time.time() - overall_start
-    log(f"\n{'='*60}")
-    log("批量处理完成!")
-    log(f"总共处理了 {total_packages} 个包")
-    log(f"总耗时: {total_time:.1f}s ({total_time/60:.1f}分钟)")
-    log("=" * 60)
+    log.log(f"\n{'='*60}")
+    log.log("批量处理完成!")
+    log.log(f"总共处理了 {total_packages} 个包")
+    log.log(f"总耗时: {total_time:.1f}s ({total_time/60:.1f}分钟)")
+    log.log("=" * 60)
 
 
 if __name__ == "__main__":
@@ -287,19 +273,14 @@ if __name__ == "__main__":
     #                    model_name="qwen3-max")
     model_name = "qwen3-max"
     pkg_path = "/Data2/hxq/datasets/incremental_packages_subset/malicious/2023-08/tencentcloud-python-sdk-3.0.959"
-    log_file_path = Path("/Data2/hxq/GMLLM/GMLLM/extractAST/batch_extract.log")
-    log_file_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # 清空日志文件
-    log_file_path.write_text("", encoding="utf-8")
-
-    log("=" * 60)
-    log("开始批量提取 Call Graph")
-    log(f"Model: {model_name}")
-    log("=" * 60)
+    log.log("=" * 60)
+    log.log("开始批量提取 Call Graph")
+    log.log(f"Model: {model_name}")
+    log.log("=" * 60)
 
     # 只合成一次规则，复用于所有包
-    log("\n[1/2] 正在合成规则...")
+    log.log("\n[1/2] 正在合成规则...")
     detector = LLMBehaviorDetector(
         model_name=model_name,
         use_rule_fallback=True,
@@ -310,11 +291,11 @@ if __name__ == "__main__":
         synth_path = Path("/Data2/hxq/GMLLM/GMLLM/extractAST/synth_rules.json")
         # synth_path.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
         detector.load_synth_rules(synth_path)
-        log(f"[ok] 规则合成成功，保存在 {synth_path}")
+        log.log(f"[ok] 规则合成成功，保存在 {synth_path}")
     except Exception as e:
-        log(f"[warn] 规则合成失败，将使用 fallback 规则: {e}")
+        log.log(f"[warn] 规则合成失败，将使用 fallback 规则: {e}")
     
-    log("\n[2/2] 开始处理所有包...")
+    log.log("\n[2/2] 开始处理所有包...")
     overall_start = time.time()
     extract_call_graph(
         src_path=pkg_path,

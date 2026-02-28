@@ -1,2 +1,4 @@
-GMLLM/log
-GMLLM/extractAST/models
+*.log
+*.pt
+*.pyc
+**/__pycache__/
