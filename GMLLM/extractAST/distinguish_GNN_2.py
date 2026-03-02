@@ -8,17 +8,17 @@ import argparse
 from torch_geometric.data import Data
 from torch_geometric.loader import DataLoader
 from torch_geometric.nn import GCNConv, global_mean_pool
-from generate_graph_data_fromJson import CallGraphDatasetFull_Lazy
 from torch.utils.data import ConcatDataset
 from torch.utils.data import Subset
 from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
 import random
 import numpy as np
 import time
-from month_utils import generate_month_range
+from utils.month_utils import generate_month_range
 from plot_results import plot_monthly_metrics
-from data_util import split_train_val_test, split_train_test
-from logger_utils import Logger
+from utils.data_utils import split_train_val_test, split_train_test
+from utils.data_loader import load_vocabs, build_dataloaders, load_month_dataset
+from utils.logger_utils import Logger
 
 # 创建日志记录器
 log = Logger("train_base_model.log")
@@ -117,10 +117,12 @@ if __name__ == "__main__":
     # 阶段1: 配置和初始化
     # =============================================================================
     vocab_dir = "/Data2/hxq/datasets/incremental_packages_subset/vocab"
-    benign_root = "/Data2/hxq/datasets/incremental_packages_subset/benign"
-    malicious_root = "/Data2/hxq/datasets/incremental_packages_subset/malicious"
-    benign_out = "/Data2/hxq/datasets/incremental_packages_subset/benign_call_processed"
-    malicious_out = "/Data2/hxq/datasets/incremental_packages_subset/malicious_call_processed"
+    data_paths = {
+        'benign_root': "/Data2/hxq/datasets/incremental_packages_subset/benign",
+        'malicious_root': "/Data2/hxq/datasets/incremental_packages_subset/malicious",
+        'benign_out': "/Data2/hxq/datasets/incremental_packages_subset/benign_call_processed",
+        'malicious_out': "/Data2/hxq/datasets/incremental_packages_subset/malicious_call_processed",
+    }
     epochs = 60
     batch_size = 128
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -133,11 +135,7 @@ if __name__ == "__main__":
     # =============================================================================
     # 阶段2: 加载词汇表
     # =============================================================================
-    name2idx = load_dict(str(Path(vocab_dir) / "name2idx.json"))
-    type2idx = load_dict(str(Path(vocab_dir) / "type2idx.json"))
-    behavior2idx = load_dict(str(Path(vocab_dir) / "behavior2idx.json"))
-    edge_type2idx = load_dict(str(Path(vocab_dir) / "edge_type2idx.json"))
-    log.log('Load vocab done.')
+    name2idx, type2idx, behavior2idx, edge_type2idx = load_vocabs(vocab_dir)
 
     # =============================================================================
     # 阶段3: 构建数据集 (按月份循环)
@@ -155,18 +153,7 @@ if __name__ == "__main__":
 
     for month in generate_month_range('2022-01', '2024-12'):
         # 加载当月数据集
-        normal_dataset = CallGraphDatasetFull_Lazy(
-            root_dir=benign_root, output_dir=benign_out,
-            name2idx=name2idx, type2idx=type2idx,
-            behavior2idx=behavior2idx, edge_type2idx=edge_type2idx,
-            fixed_label=0, start_month=month, end_month=month
-        )
-        malicious_dataset = CallGraphDatasetFull_Lazy(
-            root_dir=malicious_root, output_dir=malicious_out,
-            name2idx=name2idx, type2idx=type2idx,
-            behavior2idx=behavior2idx, edge_type2idx=edge_type2idx,
-            fixed_label=1, start_month=month, end_month=month
-        )
+        normal_dataset, malicious_dataset = load_month_dataset(month, vocab, data_paths)
 
         if month <= '2023-02':
             # 训练阶段: 80% 训练, 10% 验证, 10% 测试
@@ -208,15 +195,7 @@ if __name__ == "__main__":
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
 
     # 按月份生成测试 loader
-    test_loaders = {}
-    for month, (normal_test, malicious_test) in test_datasets.items():
-        if len(normal_test) > 0 and len(malicious_test) > 0:
-            test_loaders[month] = DataLoader(
-                ConcatDataset([normal_test, malicious_test]),
-                batch_size=batch_size, shuffle=False, num_workers=4
-            )
-        else:
-            log.log(f"[WARNING] {month}: empty test set, skipping.")
+    test_loaders = build_dataloaders(test_datasets, batch_size, shuffle=False)
 
     log.log(f"Train samples: {len(train_dataset)}")
     log.log(f"Val samples: {len(val_dataset)}")

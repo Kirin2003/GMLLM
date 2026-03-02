@@ -20,13 +20,14 @@ from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
 import random
 import numpy as np
 import time
-from month_utils import generate_month_range
+from utils.month_utils import generate_month_range
 from plot_results import plot_monthly_metrics, plot_monthly_incremental_results
-from data_util import split_train_val_test, split_train_test
+from utils.data_utils import split_train_val_test, split_train_test
+from utils.data_loader import load_vocabs, load_month_dataset, build_dataloaders, load_dict
 
 # 从 distinguish_GNN_2 导入模型定义
-from distinguish_GNN_2 import GCNWithBehavior, load_dict, set_seed, validate
-from logger_utils import Logger
+from distinguish_GNN_2 import GCNWithBehavior, set_seed, validate
+from utils.logger_utils import Logger
 log = Logger("continual_learning.log")
 
 
@@ -228,55 +229,6 @@ def discover_new_apis_in_month(month: str, data_paths: dict, base_vocab: dict) -
                 continue
 
     return new_names, new_types
-
-
-def load_vocabs(vocab_dir: str) -> tuple:
-    """加载词汇表"""
-    name2idx = load_dict(str(Path(vocab_dir) / "name2idx.json"))
-    type2idx = load_dict(str(Path(vocab_dir) / "type2idx.json"))
-    behavior2idx = load_dict(str(Path(vocab_dir) / "behavior2idx.json"))
-    edge_type2idx = load_dict(str(Path(vocab_dir) / "edge_type2idx.json"))
-    print('Load vocab done.')
-    return name2idx, type2idx, behavior2idx, edge_type2idx
-
-
-def load_month_dataset(month: str, vocab: dict, paths: dict) -> tuple:
-    """
-    加载当月数据集
-
-    Args:
-        month: 月份 (如 '2022-01')
-        vocab: 词汇表字典
-        paths: 数据路径配置
-
-    Returns:
-        (normal_dataset, malicious_dataset)
-    """
-    normal_dataset = CallGraphDatasetFull_Lazy(
-        root_dir=paths['benign_root'], output_dir=paths['benign_out'],
-        name2idx=vocab['name2idx'], type2idx=vocab['type2idx'],
-        behavior2idx=vocab['behavior2idx'], edge_type2idx=vocab['edge_type2idx'],
-        fixed_label=0, start_month=month, end_month=month
-    )
-    malicious_dataset = CallGraphDatasetFull_Lazy(
-        root_dir=paths['malicious_root'], output_dir=paths['malicious_out'],
-        name2idx=vocab['name2idx'], type2idx=vocab['type2idx'],
-        behavior2idx=vocab['behavior2idx'], edge_type2idx=vocab['edge_type2idx'],
-        fixed_label=1, start_month=month, end_month=month
-    )
-    return normal_dataset, malicious_dataset
-
-
-def build_test_loaders(test_datasets: dict, batch_size: int) -> dict:
-    """构建所有月份的测试数据加载器"""
-    test_loaders = {}
-    for month, (normal_test, malicious_test) in test_datasets.items():
-        if len(normal_test) > 0 and len(malicious_test) > 0:
-            test_loaders[month] = DataLoader(
-                ConcatDataset([normal_test, malicious_test]),
-                batch_size=batch_size, shuffle=False, num_workers=4
-            )
-    return test_loaders
 
 
 def initialize_model(vocab: dict, device: str, model_config: dict = None):
@@ -507,7 +459,7 @@ def run_continual_learning_unk(
 
     if first_future_month in test_datasets:
         log.log(f"\n--- Evaluating base model on {first_future_month} (before incremental learning) ---")
-        first_future_loader = build_test_loaders({first_future_month: test_datasets[first_future_month]}, batch_size)
+        first_future_loader = build_dataloaders({first_future_month: test_datasets[first_future_month]}, batch_size, shuffle=False)
         first_loader = first_future_loader[first_future_month]
         metrics = validate(model, first_loader, device)
         f1, acc, recall, precision = metrics
@@ -551,7 +503,7 @@ def run_continual_learning_unk(
 
         # 评估: 所有已见月份
         seen_test_datasets = {m: test_datasets[m] for m in test_datasets if m <= month}
-        seen_test_loaders = build_test_loaders(seen_test_datasets, batch_size)
+        seen_test_loaders = build_dataloaders(seen_test_datasets, batch_size, shuffle=False)
 
         log.log(f"Evaluating on months up to {month}...")
         for test_month in sorted(seen_test_loaders.keys()):
@@ -573,7 +525,7 @@ def run_continual_learning_unk(
             next_month = all_months_list[month_idx + 1]
             if next_month in test_datasets:
                 log.log(f"Evaluating on next month {next_month}...")
-                next_test_loader = build_test_loaders({next_month: test_datasets[next_month]}, batch_size)
+                next_test_loader = build_dataloaders({next_month: test_datasets[next_month]}, batch_size, shuffle=False)
                 next_loader = next_test_loader[next_month]
                 metrics = validate(model, next_loader, device)
                 f1, acc, recall, precision = metrics
@@ -749,7 +701,7 @@ def run_continual_learning(
         # 评估: 2022-01 ~ month 的所有已见月份
         # 重新构建包含当月的测试loaders
         seen_test_datasets = {m: test_datasets[m] for m in test_datasets if m <= month}
-        seen_test_loaders = build_test_loaders(seen_test_datasets, batch_size)
+        seen_test_loaders = build_dataloaders(seen_test_datasets, batch_size, shuffle=False)
 
         print(f"Evaluating on months up to {month}...")
         for test_month in sorted(seen_test_loaders.keys()):
@@ -766,14 +718,14 @@ def run_continual_learning(
             seen_months_results['recall'].append(recall)
 
         # 评估: 当月后一个月
-        from month_utils import generate_month_range as gen_month_range
+        from utils.month_utils import generate_month_range as gen_month_range
         all_months_list = list(gen_month_range(inc_start, inc_end))
         month_idx = all_months_list.index(month)
         if month_idx + 1 < len(all_months_list):
             next_month = all_months_list[month_idx + 1]
             if next_month in test_datasets:
                 print(f"Evaluating on next month {next_month}...")
-                next_test_loader = build_test_loaders({next_month: test_datasets[next_month]}, batch_size)
+                next_test_loader = build_dataloaders({next_month: test_datasets[next_month]}, batch_size, shuffle=False)
                 next_loader = next_test_loader[next_month]
                 metrics = validate(model, next_loader, device)
                 f1, acc, recall, precision = metrics

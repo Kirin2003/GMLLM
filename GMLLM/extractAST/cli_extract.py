@@ -6,8 +6,8 @@ import json
 from graph_builder import ProjectGraphBuilder
 from llm_detector import LLMBehaviorDetector
 from exporter import save_call_graph
-from month_utils import generate_month_range
-from logger_utils import Logger
+from utils.month_utils import generate_month_range
+from utils.logger_utils import Logger
 log = Logger("batch_extract.log")
 
 def extract_call_graph(src_path: Path | str, out_path: Path | str,
