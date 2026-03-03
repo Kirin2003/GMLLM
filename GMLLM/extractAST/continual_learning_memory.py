@@ -149,41 +149,6 @@ def train_with_CL(model, new_task_loader, memory_loader, optimizer, criterion, d
     return total_loss / total, correct / total
 
 
-def train_with_CL_multi_epochs(model, new_task_loader, memory_loader, optimizer,
-                                criterion, device, epochs: int = 5):
-    """
-    多epoch的1:1交替训练（用于每个月的增量训练）
-
-    Args:
-        model: GCNWithBehavior 模型
-        new_task_loader: 当前新任务数据加载器
-        memory_loader: 记忆库数据加载器（可能为空）
-        optimizer: 优化器
-        criterion: 损失函数
-        device: 设备
-        epochs: 训练轮数
-
-    Returns:
-        (avg_loss, accuracy)
-    """
-    best_acc = 0.0
-
-    for epoch in range(1, epochs + 1):
-        if memory_loader is not None and len(memory_loader) > 0:
-            # 1:1 交替训练
-            train_loss, train_acc = train_with_CL(
-                model, new_task_loader, memory_loader, optimizer, criterion, device
-            )
-        else:
-            # 仅训练新任务（第一个月没有记忆库）
-            from distinguish_GNN_2 import train as basic_train
-            train_loss, train_acc = basic_train(
-                model, new_task_loader, optimizer, criterion, device
-            )
-
-    return train_loss, train_acc
-
-
 # ============================================================================
 # 辅助函数
 # ============================================================================
@@ -231,33 +196,6 @@ def discover_new_apis_in_month(month: str, data_paths: dict, base_vocab: dict) -
     return new_names, new_types
 
 
-def initialize_model(vocab: dict, device: str, model_config: dict = None):
-    """
-    初始化模型、优化器和损失函数
-
-    Args:
-        vocab: 词汇表
-        device: 设备
-        model_config: 模型配置
-
-    Returns:
-        (model, optimizer, criterion, device)
-    """
-    if model_config is None:
-        model_config = {'lr': 0.005, 'weight_decay': 1e-3}
-
-    device = torch.device(device)
-    model = GCNWithBehavior(
-        name_vocab_size=len(vocab['name2idx']),
-        type_vocab_size=len(vocab['type2idx']),
-        behavior_dim=len(vocab['behavior2idx'])
-    ).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=model_config['lr'], weight_decay=model_config['weight_decay'])
-    criterion = nn.CrossEntropyLoss()
-
-    return model, optimizer, criterion, device
-
-
 def create_memory_loader(memory_samples: list, batch_size: int):
     """创建记忆库数据加载器"""
     if len(memory_samples) > 0:
@@ -296,31 +234,6 @@ def train_month(model, month_train_loader, memory_loader, optimizer, criterion,
         last_loss, last_acc = train_loss, train_acc
 
     return last_loss, last_acc
-
-
-def evaluate_all_months(model, test_loaders: dict, device) -> dict:
-    """
-    在所有已见月份上评估模型
-
-    Returns:
-        results: {'month': [...], 'f1': [...], 'acc': [...], ...}
-    """
-    results = {'month': [], 'f1': [], 'acc': [], 'precision': [], 'recall': []}
-
-    for month in sorted(test_loaders.keys()):
-        test_loader = test_loaders[month]
-        metrics = validate(model, test_loader, device)
-        f1, acc, malicious_recall, malicious_precision = metrics
-
-        results['month'].append(month)
-        results['f1'].append(f1)
-        results['acc'].append(acc)
-        results['precision'].append(malicious_precision)
-        results['recall'].append(malicious_recall)
-
-        log.log(f"{month} | F1: {f1:.4f} | Acc: {acc:.4f} | Precision: {malicious_precision:.4f} | Recall: {malicious_recall:.4f}")
-
-    return results
 
 
 def save_results(results: dict, output_path: str):
@@ -430,15 +343,15 @@ def run_continual_learning_unk(
         test_datasets[month] = (normal_test, malicious_test)
 
         # 发现当月的新API（仅统计，不改变词汇表）
-        new_names, new_types = discover_new_apis_in_month(month, data_paths, base_vocab)
-        if new_names or new_types:
-            log.log(f"    -> Discovered {len(new_names)} new APIs, {len(new_types)} new types (mapped to UNK)")
-            new_apis_stats.append({
-                'month': month,
-                'new_api_names': len(new_names),
-                'new_api_types': len(new_types),
-                'total_new': len(new_names) + len(new_types)
-            })
+        # new_names, new_types = discover_new_apis_in_month(month, data_paths, base_vocab)
+        # if new_names or new_types:
+        #     log.log(f"    -> Discovered {len(new_names)} new APIs, {len(new_types)} new types (mapped to UNK)")
+        #     new_apis_stats.append({
+        #         'month': month,
+        #         'new_api_names': len(new_names),
+        #         'new_api_types': len(new_types),
+        #         'total_new': len(new_names) + len(new_types)
+        #     })
 
     # 4. 构建基础月份记忆库
     memory_samples = []
@@ -764,12 +677,12 @@ def run_continual_learning(
 if __name__ == "__main__":
 
     # ===== 配置参数 =====
-    vocab_dir = "/Data2/hxq/datasets/incremental_packages_subset/vocab"
+    vocab_dir = "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/vocab"
     data_paths = {
-        'benign_root': "/Data2/hxq/datasets/incremental_packages_subset/benign",
-        'malicious_root': "/Data2/hxq/datasets/incremental_packages_subset/malicious",
-        'benign_out': "/Data2/hxq/datasets/incremental_packages_subset/benign_call_processed",
-        'malicious_out': "/Data2/hxq/datasets/incremental_packages_subset/malicious_call_processed",
+        'benign_root': "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/benign",
+        'malicious_root': "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/malicious",
+        'benign_out': "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/benign_call_processed",
+        'malicious_out': "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/malicious_call_processed",
     }
 
     # 运行增量学习
@@ -783,5 +696,5 @@ if __name__ == "__main__":
         memory_per_month=10,
         device="cuda" if torch.cuda.is_available() else "cpu",
         seed=42,
-        pretrained_model_path="./models/base_model_0207.pt"  # 加载预训练模型
+        pretrained_model_path="./models/base_model.pt"  # 加载预训练模型
     )

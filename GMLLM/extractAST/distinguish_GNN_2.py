@@ -116,14 +116,15 @@ if __name__ == "__main__":
     # =============================================================================
     # 阶段1: 配置和初始化
     # =============================================================================
-    vocab_dir = "/Data2/hxq/datasets/incremental_packages_subset/vocab"
+    vocab_dir = "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/vocab"
     data_paths = {
-        'benign_root': "/Data2/hxq/datasets/incremental_packages_subset/benign",
-        'malicious_root': "/Data2/hxq/datasets/incremental_packages_subset/malicious",
-        'benign_out': "/Data2/hxq/datasets/incremental_packages_subset/benign_call_processed",
-        'malicious_out': "/Data2/hxq/datasets/incremental_packages_subset/malicious_call_processed",
+        'benign_root': "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/benign",
+        'malicious_root': "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/malicious",
+        'benign_out': "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/benign_call_processed",
+        'malicious_out': "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/malicious_call_processed",
     }
     epochs = 60
+    patience = 10  # early stopping: stop if no improvement for 10 epochs
     batch_size = 128
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -136,6 +137,12 @@ if __name__ == "__main__":
     # 阶段2: 加载词汇表
     # =============================================================================
     name2idx, type2idx, behavior2idx, edge_type2idx = load_vocabs(vocab_dir)
+    vocab = {
+        'name2idx': name2idx,
+        'type2idx': type2idx,
+        'behavior2idx': behavior2idx,
+        'edge_type2idx': edge_type2idx
+    }
 
     # =============================================================================
     # 阶段3: 构建数据集 (按月份循环)
@@ -214,94 +221,102 @@ if __name__ == "__main__":
     criterion = torch.nn.CrossEntropyLoss()
 
     best_val_f1 = 0
+    no_improve_count = 0
     history = {'train_loss': [], 'train_acc': [], 'val_f1': [], 'val_acc': [], 'val_precision': [], 'val_recall': []}
 
     # =============================================================================
     # 阶段5: 训练模型
     # =============================================================================
-    # train_start = time.time()
-    # log.log(f"\nTraining started at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    train_start = time.time()
+    log.log(f"\nTraining started at {time.strftime('%Y-%m-%d %H:%M:%S')}")
 
-    # for epoch in range(1, epochs + 1):
-    #     train_loss, train_acc = train(model, train_loader, optimizer, criterion, device)
-    #     val_metrics = validate(model, val_loader, device)
-    #     val_f1, acc, malicious_recall, val_precision = val_metrics
+    for epoch in range(1, epochs + 1):
+        train_loss, train_acc = train(model, train_loader, optimizer, criterion, device)
+        val_metrics = validate(model, val_loader, device)
+        val_f1, acc, malicious_recall, val_precision = val_metrics
 
-    #     history['train_loss'].append(train_loss)
-    #     history['train_acc'].append(train_acc)
-    #     history['val_f1'].append(val_f1)
-    #     history['val_acc'].append(acc)
-    #     history['val_precision'].append(val_precision)
-    #     history['val_recall'].append(malicious_recall)
+        history['train_loss'].append(train_loss)
+        history['train_acc'].append(train_acc)
+        history['val_f1'].append(val_f1)
+        history['val_acc'].append(acc)
+        history['val_precision'].append(val_precision)
+        history['val_recall'].append(malicious_recall)
 
-    #     log.log(
-    #         f"Epoch {epoch:03d} | Loss {train_loss:.4f} | TrainAcc {train_acc:.4f} | ValF1 {val_f1:.4f} | ValAcc {acc:.4f} | MalRecall {malicious_recall:.4f}")
+        log.log(
+            f"Epoch {epoch:03d} | Loss {train_loss:.4f} | TrainAcc {train_acc:.4f} | ValF1 {val_f1:.4f} | ValAcc {acc:.4f} | MalRecall {malicious_recall:.4f}")
 
-    #     if val_f1 > best_val_f1:
-    #         best_val_f1 = val_f1
-    #         torch.save(model.state_dict(), "models/base_model.pt")
+        if val_f1 > best_val_f1:
+            best_val_f1 = val_f1
+            torch.save(model.state_dict(), "models/base_model.pt")
+            no_improve_count = 0  # reset counter when improvement occurs
+        else:
+            no_improve_count += 1
 
-    # train_time = time.time() - train_start
-    # log.log(f"\nTraining completed at {time.strftime('%Y-%m-%d %H:%M:%S')}")
-    # log.log(f"Training done in {train_time:.2f}s ({train_time/60:.2f} min). Best Val F1: {best_val_f1:.4f}")
+        if no_improve_count >= patience:
+            log.log(f"\nEarly stopping at epoch {epoch}! No improvement for {patience} epochs.")
+            break
+
+    train_time = time.time() - train_start
+    log.log(f"\nTraining completed at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    log.log(f"Training done in {train_time:.2f}s ({train_time/60:.2f} min). Best Val F1: {best_val_f1:.4f}")
 
     # =============================================================================
     # 阶段6: 按月测试
     # =============================================================================
     # 加载最佳模型进行测试
-    model.load_state_dict(torch.load("models/base_model_0207.pt", map_location=device))
+    # model.load_state_dict(torch.load("models/base_model.pt", map_location=device))
 
-    val_period_results = {'month': [], 'f1': [], 'acc': [], 'precision': [], 'recall': []}
-    future_test_results = {'month': [], 'f1': [], 'acc': [], 'precision': [], 'recall': []}
+    # val_period_results = {'month': [], 'f1': [], 'acc': [], 'precision': [], 'recall': []}
+    # future_test_results = {'month': [], 'f1': [], 'acc': [], 'precision': [], 'recall': []}
 
-    log.log("\n=== Validation Period Test Results (2022-01 ~ 2023-02) ===")
-    for month in sorted(test_loaders.keys()):
-        test_loader = test_loaders[month]
-        metrics = validate(model, test_loader, device)
-        f1, acc, malicious_recall, malicious_precision = metrics
+    # log.log("\n=== Validation Period Test Results (2022-01 ~ 2023-02) ===")
+    # for month in sorted(test_loaders.keys()):
+    #     test_loader = test_loaders[month]
+    #     metrics = validate(model, test_loader, device)
+    #     f1, acc, malicious_recall, malicious_precision = metrics
 
-        result_entry = {
-            'month': month, 'f1': f1, 'acc': acc,
-            'precision': malicious_precision, 'recall': malicious_recall
-        }
+    #     result_entry = {
+    #         'month': month, 'f1': f1, 'acc': acc,
+    #         'precision': malicious_precision, 'recall': malicious_recall
+    #     }
 
-        if month <= '2023-02':
-            # 验证期的测试结果
-            val_period_results['month'].append(month)
-            val_period_results['f1'].append(f1)
-            val_period_results['acc'].append(acc)
-            val_period_results['precision'].append(malicious_precision)
-            val_period_results['recall'].append(malicious_recall)
-        else:
-            # 未来测试结果
-            future_test_results['month'].append(month)
-            future_test_results['f1'].append(f1)
-            future_test_results['acc'].append(acc)
-            future_test_results['precision'].append(malicious_precision)
-            future_test_results['recall'].append(malicious_recall)
+    #     if month <= '2023-02':
+    #         # 验证期的测试结果
+    #         val_period_results['month'].append(month)
+    #         val_period_results['f1'].append(f1)
+    #         val_period_results['acc'].append(acc)
+    #         val_period_results['precision'].append(malicious_precision)
+    #         val_period_results['recall'].append(malicious_recall)
+    #     else:
+    #         # 未来测试结果
+    #         future_test_results['month'].append(month)
+    #         future_test_results['f1'].append(f1)
+    #         future_test_results['acc'].append(acc)
+    #         future_test_results['precision'].append(malicious_precision)
+    #         future_test_results['recall'].append(malicious_recall)
 
-        log.log(f"{month} | F1: {f1:.4f} | Acc: {acc:.4f} | Precision: {malicious_precision:.4f} | Recall: {malicious_recall:.4f}")
+    #     log.log(f"{month} | F1: {f1:.4f} | Acc: {acc:.4f} | Precision: {malicious_precision:.4f} | Recall: {malicious_recall:.4f}")
 
-    # 未来测试结果汇总
-    log.log("\n=== Future Test Results Summary (2023-03 ~ 2024-12) ===")
-    if len(future_test_results['month']) > 0:
-        avg_f1 = sum(future_test_results['f1']) / len(future_test_results['f1'])
-        avg_acc = sum(future_test_results['acc']) / len(future_test_results['acc'])
-        avg_prec = sum(future_test_results['precision']) / len(future_test_results['precision'])
-        avg_recall = sum(future_test_results['recall']) / len(future_test_results['recall'])
-        log.log(f"Average | F1: {avg_f1:.4f} | Acc: {avg_acc:.4f} | Precision: {avg_prec:.4f} | Recall: {avg_recall:.4f}")
+    # # 未来测试结果汇总
+    # log.log("\n=== Future Test Results Summary (2023-03 ~ 2024-12) ===")
+    # if len(future_test_results['month']) > 0:
+    #     avg_f1 = sum(future_test_results['f1']) / len(future_test_results['f1'])
+    #     avg_acc = sum(future_test_results['acc']) / len(future_test_results['acc'])
+    #     avg_prec = sum(future_test_results['precision']) / len(future_test_results['precision'])
+    #     avg_recall = sum(future_test_results['recall']) / len(future_test_results['recall'])
+    #     log.log(f"Average | F1: {avg_f1:.4f} | Acc: {avg_acc:.4f} | Precision: {avg_prec:.4f} | Recall: {avg_recall:.4f}")
 
-    # =============================================================================
-    # 阶段7: 保存测试结果
-    # =============================================================================
-    results_dir = Path("./results")
-    os.makedirs(results_dir, exist_ok=True)
-    with open(results_dir / "val_period_test_results.json", 'w') as f:
-        json.dump(val_period_results, f, indent=2)
-    with open(results_dir / "future_test_results.json", 'w') as f:
-        json.dump(future_test_results, f, indent=2)
+    # # =============================================================================
+    # # 阶段7: 保存测试结果
+    # # =============================================================================
+    # results_dir = Path("./results")
+    # os.makedirs(results_dir, exist_ok=True)
+    # with open(results_dir / "val_period_test_results.json", 'w') as f:
+    #     json.dump(val_period_results, f, indent=2)
+    # with open(results_dir / "future_test_results.json", 'w') as f:
+    #     json.dump(future_test_results, f, indent=2)
 
-    # log.log(f"Training done in {train_time:.2f}s ({train_time/60:.2f} min). Best Val F1: {best_val_f1:.4f}")
-    log.log(f"Results saved to {results_dir}/")
-    log.log("  - val_period_test_results.json")
-    log.log("  - future_test_results.json")
+    # # log.log(f"Training done in {train_time:.2f}s ({train_time/60:.2f} min). Best Val F1: {best_val_f1:.4f}")
+    # log.log(f"Results saved to {results_dir}/")
+    # log.log("  - val_period_test_results.json")
+    # log.log("  - future_test_results.json")

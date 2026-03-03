@@ -258,11 +258,11 @@ def _cli_main_():
     print("Dataset processing complete.")
 if __name__ == "__main__":
     # _cli_main_()
-    normal_root = "/Data2/hxq/datasets/incremental_packages_subset/benign"
-    malicious_root = "/Data2/hxq/datasets/incremental_packages_subset/malicious"
-    normal_out = "/Data2/hxq/datasets/incremental_packages_subset/benign_call_processed"
-    malicious_out = "/Data2/hxq/datasets/incremental_packages_subset/malicious_call_processed"
-    VOCAB_DIR = "/Data2/hxq/datasets/incremental_packages_subset/vocab"
+    normal_root = "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/benign"
+    malicious_root = "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/malicious"
+    normal_out = "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/benign_call_processed"
+    malicious_out = "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/malicious_call_processed"
+    VOCAB_DIR = "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/vocab"
 
     print("\n[1/3] Building global vocab...")
     vocab_start = time.time()

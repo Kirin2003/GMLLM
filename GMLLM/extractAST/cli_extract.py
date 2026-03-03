@@ -272,7 +272,7 @@ if __name__ == "__main__":
     #                    out_path="/Data2/hxq/datasets/incremental_packages_subset/malicious/2023-08/tencentcloud-python-sdk-3.0.959",
     #                    model_name="qwen3-max")
     model_name = "qwen3-max"
-    pkg_path = "/Data2/hxq/datasets/incremental_packages_subset/malicious/2023-08/tencentcloud-python-sdk-3.0.959"
+    pkg_path = "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/"
 
     log.log("=" * 60)
     log.log("开始批量提取 Call Graph")
@@ -280,25 +280,25 @@ if __name__ == "__main__":
     log.log("=" * 60)
 
     # 只合成一次规则，复用于所有包
-    log.log("\n[1/2] 正在合成规则...")
-    detector = LLMBehaviorDetector(
-        model_name=model_name,
-        use_rule_fallback=True,
-    )
+    # log.log("\n[1/2] 正在合成规则...")
+    # detector = LLMBehaviorDetector(
+    #     model_name=model_name,
+    #     use_rule_fallback=True,
+    # )
 
-    try:
-        # obj = detector.synthesize_rules()
-        synth_path = Path("/Data2/hxq/GMLLM/GMLLM/extractAST/synth_rules.json")
-        # synth_path.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
-        detector.load_synth_rules(synth_path)
-        log.log(f"[ok] 规则合成成功，保存在 {synth_path}")
-    except Exception as e:
-        log.log(f"[warn] 规则合成失败，将使用 fallback 规则: {e}")
+    # try:
+    #     # obj = detector.synthesize_rules()
+    #     synth_path = Path("/Data2/hxq/GMLLM/GMLLM/extractAST/synth_rules.json")
+    #     # synth_path.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
+    #     detector.load_synth_rules(synth_path)
+    #     log.log(f"[ok] 规则合成成功，保存在 {synth_path}")
+    # except Exception as e:
+    #     log.log(f"[warn] 规则合成失败，将使用 fallback 规则: {e}")
     
-    log.log("\n[2/2] 开始处理所有包...")
+    # log.log("\n[2/2] 开始处理所有包...")
     overall_start = time.time()
-    extract_call_graph(
-        src_path=pkg_path,
-        out_path=pkg_path,
-        detector=detector,
+    batch_extract_call_graphs(
+        base_path=pkg_path
     )
+    total_time = time.time() - overall_start
+    log.log("Total execution time: {total_time:.1f}s ({total_time/60:.1f}min)")
