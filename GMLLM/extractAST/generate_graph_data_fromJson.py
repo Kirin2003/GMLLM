@@ -4,6 +4,7 @@ import time
 import torch
 from pathlib import Path
 import argparse
+import yaml
 from tqdm import tqdm
 from torch_geometric.data import Dataset
 from torch_geometric.data import Data
@@ -203,70 +204,32 @@ def clean_dir(path):
             if f.endswith(".pt") or f == "index.json":
                 os.remove(Path(path) / f)
 
-def _cli_main_():
-    parser = argparse.ArgumentParser(description="Generate PyG data from call_graph.json folders and build vocabs.")
-    parser.add_argument("--normal-root", required=True, help="Directory with benign_call/*/call_graph.json")
-    parser.add_argument("--malicious-root", required=True, help="Directory with malicious_call/*/call_graph.json")
-    parser.add_argument("--normal-out", required=True, help="Output dir for processed benign graphs")
-    parser.add_argument("--malicious-out", required=True, help="Output dir for processed malicious graphs")
-    parser.add_argument("--vocab-dir", required=True, help="Directory to save vocabs...")
-    args = parser.parse_args()
-    global normal_root, malicious_root, normal_out, malicious_out, VOCAB_DIR
-    normal_root = args.normal_root
-    malicious_root = args.malicious_root
-    normal_out = args.normal_out
-    malicious_out = args.malicious_out
-    if args.vocab_dir:
-        VOCAB_DIR = args.vocab_dir
-    else:
-        p = Path(normal_root).resolve().parent
-        VOCAB_DIR = str(p / "vocab")
-    os.makedirs(VOCAB_DIR, exist_ok=True)
 
-    name2idx, type2idx, edge_type2idx, behavior2idx = build_global_vocab([normal_root, malicious_root])
-    os.makedirs('placeholder', exist_ok=True)
-    with open(str(Path(VOCAB_DIR) / "name2idx.json"), 'w') as f:
-        json.dump(name2idx, f, indent=2)
-    with open(str(Path(VOCAB_DIR) / "type2idx.json"), 'w') as f:
-        json.dump(type2idx, f, indent=2)
-    with open(str(Path(VOCAB_DIR) / "edge_type2idx.json"), 'w') as f:
-        json.dump(edge_type2idx, f, indent=2)
-    with open(str(Path(VOCAB_DIR) / "behavior2idx.json"), 'w') as f:
-        json.dump(behavior2idx, f, indent=2)
-    clean_dir(normal_out)
-    clean_dir(malicious_out)
-    print("\nProcessing benign packages...")
-    _ = CallGraphDatasetFull_Lazy(
-        root_dir=normal_root,
-        output_dir=normal_out,
-        name2idx=name2idx,
-        type2idx=type2idx,
-        edge_type2idx=edge_type2idx,
-        behavior2idx=behavior2idx,
-        fixed_label=0,
-    )
-    print("\nProcessing malicious packages...")
-    _ = CallGraphDatasetFull_Lazy(
-        root_dir=malicious_root,
-        output_dir=malicious_out,
-        name2idx=name2idx,
-        type2idx=type2idx,
-        edge_type2idx=edge_type2idx,
-        behavior2idx=behavior2idx,
-        fixed_label=1,
-    )
-    print("Dataset processing complete.")
 if __name__ == "__main__":
-    # _cli_main_()
-    normal_root = "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/benign"
-    malicious_root = "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/malicious"
-    normal_out = "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/benign_call_processed"
-    malicious_out = "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/malicious_call_processed"
-    VOCAB_DIR = "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/vocab"
+    # 加载配置文件
+    config_path = "./configs/default.yaml"
+    config = yaml.safe_load(open(config_path))
+
+    # 从配置中读取路径
+    base_path = config['dataset']['base_path']
+    normal_root = str(Path(base_path) / config['dataset']['benign_root'])
+    malicious_root = str(Path(base_path) / config['dataset']['malicious_root'])
+    normal_out = str(Path(base_path) / config['dataset']['benign_out'])
+    malicious_out = str(Path(base_path) / config['dataset']['malicious_out'])
+    VOCAB_DIR = str(Path(base_path) / config['dataset']['vocab_dir'])
+
+    # 从配置中读取时间范围
+    cl_config = config.get('continual_learning', {})
+    base_train_months = cl_config.get('base_train_months', ['2022-01', '2023-02'])
+    incremental_months = cl_config.get('incremental_months', ['2023-03', '2024-12'])
+    vocab_start_month = base_train_months[0]
+    vocab_end_month = base_train_months[1]
+    data_start_month = base_train_months[0]
+    data_end_month = incremental_months[1]
 
     print("\n[1/3] Building global vocab...")
     vocab_start = time.time()
-    name2idx, type2idx, edge_type2idx, behavior2idx = build_global_vocab([normal_root, malicious_root], start_month='2022-01', end_month='2023-02')
+    name2idx, type2idx, edge_type2idx, behavior2idx = build_global_vocab([normal_root, malicious_root], start_month=vocab_start_month, end_month=vocab_end_month)
     vocab_time = time.time() - vocab_start
     print(f"  build_global_vocab completed in {vocab_time:.2f}s")
     os.makedirs(VOCAB_DIR, exist_ok=True)
@@ -291,8 +254,8 @@ if __name__ == "__main__":
         edge_type2idx=edge_type2idx,
         behavior2idx=behavior2idx,
         fixed_label=0,
-        start_month='2022-01',
-        end_month='2024-12'
+        start_month=data_start_month,
+        end_month=data_end_month
     )
     benign_time = time.time() - benign_start
     print(f"  CallGraphDatasetFull_Lazy (benign) completed in {benign_time:.2f}s")
@@ -307,8 +270,8 @@ if __name__ == "__main__":
         edge_type2idx=edge_type2idx,
         behavior2idx=behavior2idx,
         fixed_label=1,
-        start_month='2022-01',
-        end_month='2024-12'
+        start_month=data_start_month,
+        end_month=data_end_month
     )
     malicious_time = time.time() - malicious_start
     print(f"  CallGraphDatasetFull_Lazy (malicious) completed in {malicious_time:.2f}s")

@@ -113,68 +113,103 @@ def validate(model, loader, device):
     return malicious_f1, acc, malicious_recall, malicious_precision
 
 
-if __name__ == "__main__":
+# =============================================================================
+# 辅助函数
+# =============================================================================
 
-    # =============================================================================
-    # 阶段1: 配置和初始化
-    # =============================================================================
-    # 加载配置文件
-    config_path = "./configs/default.yaml"
-    if config_path.exists():
-        config = yaml.safe_load(open(config_path))
-        # 数据集路径
-        base_path = config['dataset']['base_path']
-        vocab_dir = str(Path(base_path) / config['dataset']['vocab_dir'])
-        data_paths = {
-            'benign_root': str(Path(base_path) / config['dataset']['benign_root']),
-            'malicious_root': str(Path(base_path) / config['dataset']['malicious_root']),
-            'benign_out': str(Path(base_path) / config['dataset']['benign_out']),
-            'malicious_out': str(Path(base_path) / config['dataset']['malicious_out']),
-        }
-        # 训练参数
-        epochs = config['training']['epochs']
-        patience = config['training']['patience']
-        batch_size = config['training']['batch_size']
-        SEED = config['training']['seed']
-        train_ratio = config['training']['train_ratio']
-        val_ratio = config['training']['val_ratio']
-        num_workers = config['training']['num_workers']
-        # 设备配置
-        device_config = config.get('device', 'auto')
-        if device_config == 'auto':
-            device = "cuda" if torch.cuda.is_available() else "cpu"
+def train_model(model, train_loader, val_loader, optimizer, criterion, device,
+                epochs: int, patience: int, model_save_path: str) -> tuple:
+    """训练模型"""
+    best_val_f1 = 0
+    no_improve_count = 0
+
+    train_start = time.time()
+    log.log(f"\nTraining started at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+
+    for epoch in range(1, epochs + 1):
+        train_loss, train_acc = train(model, train_loader, optimizer, criterion, device)
+        val_metrics = validate(model, val_loader, device)
+        val_f1, acc, malicious_recall, val_precision = val_metrics
+
+        log.log(
+            f"Epoch {epoch:03d} | Loss {train_loss:.4f} | TrainAcc {train_acc:.4f} | "
+            f"ValF1 {val_f1:.4f} | ValAcc {acc:.4f} | MalRecall {malicious_recall:.4f}"
+        )
+
+        if val_f1 > best_val_f1:
+            best_val_f1 = val_f1
+            torch.save(model.state_dict(), model_save_path)
+            no_improve_count = 0
         else:
-            device = device_config
-        # 路径配置
-        models_dir = config['paths']['models_dir']
-        results_dir = config['paths']['results_dir']
-    else:
-        # 配置文件不存在时使用默认值
-        vocab_dir = "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/vocab"
-        data_paths = {
-            'benign_root': "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/benign",
-            'malicious_root': "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/malicious",
-            'benign_out': "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/benign_call_processed",
-            'malicious_out': "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/malicious_call_processed",
-        }
-        epochs = 60
-        patience = 10
-        batch_size = 128
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        SEED = 42
-        train_ratio = 0.8
-        val_ratio = 0.1
-        num_workers = 4
-        models_dir = "./models"
-        results_dir = "./results"
+            no_improve_count += 1
 
-    set_seed(SEED)
+        if no_improve_count >= patience:
+            log.log(f"\nEarly stopping at epoch {epoch}! No improvement for {patience} epochs.")
+            break
 
-    os.makedirs(models_dir, exist_ok=True)
+    train_time = time.time() - train_start
+    log.log(f"\nTraining completed at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    log.log(f"Training done in {train_time:.2f}s ({train_time/60:.2f} min). Best Val F1: {best_val_f1:.4f}")
 
-    # =============================================================================
-    # 阶段2: 加载词汇表
-    # =============================================================================
+    model.load_state_dict(torch.load(model_save_path, map_location=device))
+    return model, best_val_f1
+
+
+def test_model(model, test_datasets: dict, batch_size: int, device) -> dict:
+    """按月测试模型"""
+    test_loaders = build_dataloaders(test_datasets, batch_size, shuffle=False)
+
+    log.log(f"Test months: {len(test_loaders)} ({list(test_loaders.keys())[0]} ~ {list(test_loaders.keys())[-1]})")
+
+    future_test_results = {'month': [], 'f1': [], 'acc': [], 'precision': [], 'recall': []}
+
+    log.log("\n=== Test Results ===")
+    for month in sorted(test_loaders.keys()):
+        if month > '2023-02':
+            test_loader = test_loaders[month]
+            metrics = validate(model, test_loader, device)
+            f1, acc, malicious_recall, malicious_precision = metrics
+
+            future_test_results['month'].append(month)
+            future_test_results['f1'].append(f1)
+            future_test_results['acc'].append(acc)
+            future_test_results['precision'].append(malicious_precision)
+            future_test_results['recall'].append(malicious_recall)
+
+            log.log(f"{month} | F1: {f1:.4f} | Acc: {acc:.4f} | "
+                    f"Precision: {malicious_precision:.4f} | Recall: {malicious_recall:.4f}")
+
+    if len(future_test_results['month']) > 0:
+        avg_f1 = sum(future_test_results['f1']) / len(future_test_results['f1'])
+        avg_acc = sum(future_test_results['acc']) / len(future_test_results['acc'])
+        avg_prec = sum(future_test_results['precision']) / len(future_test_results['precision'])
+        avg_recall = sum(future_test_results['recall']) / len(future_test_results['recall'])
+        log.log(f"\n=== Future Test Results Summary ===")
+        log.log(f"Average | F1: {avg_f1:.4f} | Acc: {avg_acc:.4f} | "
+                f"Precision: {avg_prec:.4f} | Recall: {avg_recall:.4f}")
+
+    return future_test_results
+
+
+def run_base_model(
+    vocab_dir: str,
+    data_paths: dict,
+    train_months: tuple = ('2022-01', '2023-02'),
+    epochs: int = 50,
+    patience: int = 10,
+    batch_size: int = 128,
+    train_ratio: float = 0.8,
+    val_ratio: float = 0.1,
+    device: str = "cuda",
+    seed: int = 42,
+    model_save_path: str = "./models/base_model.pt"
+):
+    """运行基础模型训练和测试流程"""
+    set_seed(seed)
+
+    os.makedirs(os.path.dirname(model_save_path), exist_ok=True)
+
+    # 加载词汇表
     name2idx, type2idx, behavior2idx, edge_type2idx = load_vocabs(vocab_dir)
     vocab = {
         'name2idx': name2idx,
@@ -183,49 +218,28 @@ if __name__ == "__main__":
         'edge_type2idx': edge_type2idx
     }
 
-    # =============================================================================
-    # 阶段3: 构建数据集 (按月份循环)
-    # =============================================================================
-    # 2022-01 ~ 2023-02: 80% 训练, 10% 验证, 10% 测试
-    # 2023-03 ~ 2024-12: 80% 训练, 20% 测试
+    # ========== 构建数据集 ==========
+    train_datasets = {}
+    val_datasets = {}
+    test_datasets = {}
 
-    # 按月份存储数据集: {month: (normal_dataset, malicious_dataset)}
-    train_datasets = {}   # 训练集
-    val_datasets = {}     # 验证集
-    test_datasets = {}    # 测试集
+    train_start, train_end = train_months
 
-    for month in generate_month_range('2022-01', '2024-12'):
-        # 加载当月数据集
-        normal_dataset, malicious_dataset = load_month_dataset(month, vocab, data_paths)
+    for month in generate_month_range(train_start, train_end):
+        normal_ds, malicious_ds = load_month_dataset(month, vocab, data_paths)
 
         if month <= '2023-02':
-            # 训练阶段: 80% 训练, 10% 验证, 10% 测试
             (normal_train, normal_val, normal_test,
              malicious_train, malicious_val, malicious_test) = split_train_val_test(
-                 normal_dataset, malicious_dataset, train_ratio, val_ratio
-             )
-
-            # 按月存储训练集、验证集和测试集
+                 normal_ds, malicious_ds, train_ratio, val_ratio
+            )
             train_datasets[month] = (normal_train, malicious_train)
             val_datasets[month] = (normal_val, malicious_val)
             test_datasets[month] = (normal_test, malicious_test)
-
         else:
-            # 测试阶段: 80% 训练, 20% 测试
-            # (normal_train, normal_test,
-            #  malicious_train, malicious_test) = split_train_test(
-            #      normal_dataset, malicious_dataset, train_ratio=0.8
-            #  )
+            test_datasets[month] = (normal_ds, malicious_ds)
 
-            # 所有的数据集均用作测试集和训练集，先测试再训练
-            normal_test, malicious_test = normal_dataset, malicious_dataset
-            
-
-            # 按月存储训练集和测试集
-            #train_datasets[month] = (normal_train, malicious_train)
-            test_datasets[month] = (normal_test, malicious_test)
-
-    # 构建累积的训练集、验证集和测试集
+    # 构建累积的训练集、验证集
     train_dataset = ConcatDataset([
         ConcatDataset([normal_train, malicious_train])
         for normal_train, malicious_train in train_datasets.values()
@@ -235,22 +249,16 @@ if __name__ == "__main__":
         for normal_val, malicious_val in val_datasets.values()
     ])
 
-    assert train_dataset and len(train_dataset) > 0, "Empty train set."
-    assert val_dataset and len(val_dataset) > 0, "Empty val set."
+    assert len(train_dataset) > 0, "Empty train set."
+    assert len(val_dataset) > 0, "Empty val set."
+
+    log.log(f"Train samples: {len(train_dataset)}")
+    log.log(f"Val samples: {len(val_dataset)}")
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
 
-    # 按月份生成测试 loader
-    test_loaders = build_dataloaders(test_datasets, batch_size, shuffle=False)
-
-    log.log(f"Train samples: {len(train_dataset)}")
-    log.log(f"Val samples: {len(val_dataset)}")
-    log.log(f"Test months: {len(test_loaders)} ({list(test_loaders.keys())[0]} ~ {list(test_loaders.keys())[-1]})")
-
-    # =============================================================================
-    # 阶段4: 初始化模型、优化器、损失函数
-    # =============================================================================
+    # 初始化模型
     device = torch.device(device)
     model = GCNWithBehavior(
         name_vocab_size=len(name2idx),
@@ -260,104 +268,87 @@ if __name__ == "__main__":
     optimizer = torch.optim.Adam(model.parameters(), lr=0.005, weight_decay=1e-3)
     criterion = torch.nn.CrossEntropyLoss()
 
-    best_val_f1 = 0
-    no_improve_count = 0
-    history = {'train_loss': [], 'train_acc': [], 'val_f1': [], 'val_acc': [], 'val_precision': [], 'val_recall': []}
+    # 训练模型
+    model, best_val_f1 = train_model(
+        model=model,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        optimizer=optimizer,
+        criterion=criterion,
+        device=device,
+        epochs=epochs,
+        patience=patience,
+        model_save_path=model_save_path
+    )
 
-    # =============================================================================
-    # 阶段5: 训练模型
-    # =============================================================================
-    # train_start = time.time()
-    # log.log(f"\nTraining started at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    # 测试模型
+    test_results = test_model(
+        model=model,
+        test_datasets=test_datasets,
+        batch_size=batch_size,
+        device=device
+    )
 
-    # for epoch in range(1, epochs + 1):
-    #     train_loss, train_acc = train(model, train_loader, optimizer, criterion, device)
-    #     val_metrics = validate(model, val_loader, device)
-    #     val_f1, acc, malicious_recall, val_precision = val_metrics
-
-    #     history['train_loss'].append(train_loss)
-    #     history['train_acc'].append(train_acc)
-    #     history['val_f1'].append(val_f1)
-    #     history['val_acc'].append(acc)
-    #     history['val_precision'].append(val_precision)
-    #     history['val_recall'].append(malicious_recall)
-
-    #     log.log(
-    #         f"Epoch {epoch:03d} | Loss {train_loss:.4f} | TrainAcc {train_acc:.4f} | ValF1 {val_f1:.4f} | ValAcc {acc:.4f} | MalRecall {malicious_recall:.4f}")
-
-    #     if val_f1 > best_val_f1:
-    #         best_val_f1 = val_f1
-    #         torch.save(model.state_dict(), "models/base_model.pt")
-    #         no_improve_count = 0  # reset counter when improvement occurs
-    #     else:
-    #         no_improve_count += 1
-
-    #     if no_improve_count >= patience:
-    #         log.log(f"\nEarly stopping at epoch {epoch}! No improvement for {patience} epochs.")
-    #         break
-
-    # train_time = time.time() - train_start
-    # log.log(f"\nTraining completed at {time.strftime('%Y-%m-%d %H:%M:%S')}")
-    # log.log(f"Training done in {train_time:.2f}s ({train_time/60:.2f} min). Best Val F1: {best_val_f1:.4f}")
-
-    # =============================================================================
-    # 阶段6: 按月测试
-    # =============================================================================
-    # 加载最佳模型进行测试
-    model.load_state_dict(torch.load("models/base_model.pt", map_location=device))
-
-    val_period_results = {'month': [], 'f1': [], 'acc': [], 'precision': [], 'recall': []}
-    future_test_results = {'month': [], 'f1': [], 'acc': [], 'precision': [], 'recall': []}
-
-    log.log("\n=== Validation Period Test Results (2022-01 ~ 2023-02) ===")
-    for month in sorted(test_loaders.keys()):
-        if month > '2023-02':
-            test_loader = test_loaders[month]
-            metrics = validate(model, test_loader, device)
-            f1, acc, malicious_recall, malicious_precision = metrics
-
-            result_entry = {
-                'month': month, 'f1': f1, 'acc': acc,
-                'precision': malicious_precision, 'recall': malicious_recall
-            }
-
-        
-        #     # 验证期的测试结果
-        #     val_period_results['month'].append(month)
-        #     val_period_results['f1'].append(f1)
-        #     val_period_results['acc'].append(acc)
-        #     val_period_results['precision'].append(malicious_precision)
-        #     val_period_results['recall'].append(malicious_recall)
-        # else:
-            # 未来测试结果
-            future_test_results['month'].append(month)
-            future_test_results['f1'].append(f1)
-            future_test_results['acc'].append(acc)
-            future_test_results['precision'].append(malicious_precision)
-            future_test_results['recall'].append(malicious_recall)
-
-        log.log(f"{month} | F1: {f1:.4f} | Acc: {acc:.4f} | Precision: {malicious_precision:.4f} | Recall: {malicious_recall:.4f}")
-
-    # 未来测试结果汇总
-    log.log("\n=== Future Test Results Summary (2023-03 ~ 2024-12) ===")
-    if len(future_test_results['month']) > 0:
-        avg_f1 = sum(future_test_results['f1']) / len(future_test_results['f1'])
-        avg_acc = sum(future_test_results['acc']) / len(future_test_results['acc'])
-        avg_prec = sum(future_test_results['precision']) / len(future_test_results['precision'])
-        avg_recall = sum(future_test_results['recall']) / len(future_test_results['recall'])
-        log.log(f"Average | F1: {avg_f1:.4f} | Acc: {avg_acc:.4f} | Precision: {avg_prec:.4f} | Recall: {avg_recall:.4f}")
-
-    # =============================================================================
-    # 阶段7: 保存测试结果
-    # =============================================================================
+    # 保存结果
     results_dir = Path("./results")
     os.makedirs(results_dir, exist_ok=True)
-    # with open(results_dir / "val_period_test_results.json", 'w') as f:
-    #     json.dump(val_period_results, f, indent=2)
     with open(results_dir / "test_than_train_future_test_results.json", 'w') as f:
-        json.dump(future_test_results, f, indent=2)
+        json.dump(test_results, f, indent=2)
 
-    # log.log(f"Training done in {train_time:.2f}s ({train_time/60:.2f} min). Best Val F1: {best_val_f1:.4f}")
     log.log(f"Results saved to {results_dir}/")
-    log.log("  - val_period_test_results.json")
-    log.log("  - future_test_results.json")
+
+    return model, test_results
+
+
+# =============================================================================
+# 主函数
+# =============================================================================
+
+if __name__ == "__main__":
+    # 加载配置文件
+    config_path = "./configs/default.yaml"
+    config = yaml.safe_load(open(config_path))
+
+    # 数据集路径
+    base_path = config['dataset']['base_path']
+    vocab_dir = str(Path(base_path) / config['dataset']['vocab_dir'])
+    data_paths = {
+        'benign_root': str(Path(base_path) / config['dataset']['benign_root']),
+        'malicious_root': str(Path(base_path) / config['dataset']['malicious_root']),
+        'benign_out': str(Path(base_path) / config['dataset']['benign_out']),
+        'malicious_out': str(Path(base_path) / config['dataset']['malicious_out']),
+    }
+
+    # 训练参数
+    epochs = config['training']['epochs']
+    patience = config['training']['patience']
+    batch_size = config['training']['batch_size']
+    seed = config['training']['seed']
+    train_ratio = config['training']['train_ratio']
+    val_ratio = config['training']['val_ratio']
+
+    # 设备配置
+    device_config = config.get('device', 'auto')
+    device = "cuda" if torch.cuda.is_available() else "cpu" if device_config == 'auto' else device_config
+
+    # 路径配置
+    models_dir = config['paths']['models_dir']
+
+    # 增量学习配置
+    cl_config = config.get('continual_learning', {})
+    base_train_months = tuple(cl_config.get('base_train_months', ['2022-01', '2023-02']))
+
+    # 运行训练和测试
+    run_base_model(
+        vocab_dir=vocab_dir,
+        data_paths=data_paths,
+        train_months=base_train_months,
+        epochs=epochs,
+        patience=patience,
+        batch_size=batch_size,
+        train_ratio=train_ratio,
+        val_ratio=val_ratio,
+        device=device,
+        seed=seed,
+        model_save_path=f"{models_dir}/base_model.pt"
+    )

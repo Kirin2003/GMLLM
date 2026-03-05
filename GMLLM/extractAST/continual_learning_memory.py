@@ -684,56 +684,38 @@ if __name__ == "__main__":
 
     # ===== 加载配置文件 =====
     config_path = "./configs/default.yaml"
-    if config_path.exists():
-        config = yaml.safe_load(open(config_path))
+    config = yaml.safe_load(open(config_path))
 
-        # 数据集路径
-        base_path = config['dataset']['base_path']
-        vocab_dir = str(Path(base_path) / config['dataset']['vocab_dir'])
-        data_paths = {
-            'benign_root': str(Path(base_path) / config['dataset']['benign_root']),
-            'malicious_root': str(Path(base_path) / config['dataset']['malicious_root']),
-            'benign_out': str(Path(base_path) / config['dataset']['benign_out']),
-            'malicious_out': str(Path(base_path) / config['dataset']['malicious_out']),
-        }
+    # 数据集路径
+    base_path = config['dataset']['base_path']
+    vocab_dir = str(Path(base_path) / config['dataset']['vocab_dir'])
+    data_paths = {
+        'benign_root': str(Path(base_path) / config['dataset']['benign_root']),
+        'malicious_root': str(Path(base_path) / config['dataset']['malicious_root']),
+        'benign_out': str(Path(base_path) / config['dataset']['benign_out']),
+        'malicious_out': str(Path(base_path) / config['dataset']['malicious_out']),
+    }
 
-        # 增量学习配置
-        cl_config = config.get('continual_learning', {})
-        base_train_months = tuple(cl_config.get('base_train_months', ['2022-01', '2023-02']))
-        incremental_months = tuple(cl_config.get('incremental_months', ['2023-03', '2024-12']))
-        incremental_epochs = cl_config.get('incremental_epochs', 5)
-        memory_per_month = cl_config.get('memory_per_month', 10)
+    # 增量学习配置
+    cl_config = config.get('continual_learning', {})
+    base_train_months = tuple(cl_config.get('base_train_months', ['2022-01', '2023-02']))
+    incremental_months = tuple(cl_config.get('incremental_months', ['2023-03', '2024-12']))
+    incremental_epochs = cl_config.get('incremental_epochs', 5)
+    memory_per_month = cl_config.get('memory_per_month', 10)
 
-        # 训练参数
-        batch_size = config['training']['batch_size']
-        seed = config['training']['seed']
+    # 训练参数
+    batch_size = config['training']['batch_size']
+    seed = config['training']['seed']
 
-        # 设备配置
-        device_config = config.get('device', 'auto')
-        if device_config == 'auto':
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-        else:
-            device = device_config
-
-        # 路径配置
-        pretrained_model_path = config['paths']['pretrained_model']
-    else:
-        # 配置文件不存在时使用默认值
-        vocab_dir = "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/vocab"
-        data_paths = {
-            'benign_root': "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/benign",
-            'malicious_root': "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/malicious",
-            'benign_out': "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/benign_call_processed",
-            'malicious_out': "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/malicious_call_processed",
-        }
-        base_train_months = ('2022-01', '2023-02')
-        incremental_months = ('2023-03', '2024-12')
-        incremental_epochs = 5
-        memory_per_month = 10
-        batch_size = 128
-        seed = 42
+    # 设备配置
+    device_config = config.get('device', 'auto')
+    if device_config == 'auto':
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        pretrained_model_path = "./models/base_model.pt"
+    else:
+        device = device_config
+
+    # 路径配置
+    pretrained_model_path = config['paths']['pretrained_model']
 
     # 运行增量学习
     run_continual_learning_unk(
