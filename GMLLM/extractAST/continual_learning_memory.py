@@ -11,6 +11,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from pathlib import Path
 import argparse
+import yaml
 from torch_geometric.data import Data, Dataset
 from torch_geometric.loader import DataLoader
 from torch_geometric.nn import GCNConv, global_mean_pool
@@ -24,6 +25,7 @@ from utils.month_utils import generate_month_range
 from plot_results import plot_monthly_metrics, plot_monthly_incremental_results
 from utils.data_utils import split_train_val_test, split_train_test
 from utils.data_loader import load_vocabs, load_month_dataset, build_dataloaders, load_dict
+import copy
 
 # 从 distinguish_GNN_2 导入模型定义
 from distinguish_GNN_2 import GCNWithBehavior, set_seed, validate
@@ -335,9 +337,13 @@ def run_continual_learning_unk(
         normal_ds, malicious_ds = load_month_dataset(month, vocab, data_paths)
         log.log(f"  {month}: {len(normal_ds)} normal, {len(malicious_ds)} malicious")
 
-        # 划分数据集 8:2
-        (normal_train, normal_test,
-         malicious_train, malicious_test) = split_train_test(normal_ds, malicious_ds)
+        # # 划分数据集 8:2
+        # (normal_train, normal_test,
+        #  malicious_train, malicious_test) = split_train_test(normal_ds, malicious_ds)
+
+        # 所有的数据集均用作测试集和训练集，先测试再训练
+        normal_test, malicious_test = normal_ds, malicious_ds
+        normal_train, malicious_train = copy.deepcopy(normal_ds), copy.deepcopy(malicious_ds)
 
         train_datasets[month] = (normal_train, malicious_train)
         test_datasets[month] = (normal_test, malicious_test)
@@ -415,21 +421,21 @@ def run_continual_learning_unk(
         log.log(f"Model saved to {model_path}")
 
         # 评估: 所有已见月份
-        seen_test_datasets = {m: test_datasets[m] for m in test_datasets if m <= month}
-        seen_test_loaders = build_dataloaders(seen_test_datasets, batch_size, shuffle=False)
+        # seen_test_datasets = {m: test_datasets[m] for m in test_datasets if m <= month}
+        # seen_test_loaders = build_dataloaders(seen_test_datasets, batch_size, shuffle=False)
 
-        log.log(f"Evaluating on months up to {month}...")
-        for test_month in sorted(seen_test_loaders.keys()):
-            test_loader = seen_test_loaders[test_month]
-            metrics = validate(model, test_loader, device)
-            f1, acc, recall, precision = metrics
-            log.log(f"  {test_month}: F1={f1:.4f}, Acc={acc:.4f}")
+        # log.log(f"Evaluating on months up to {month}...")
+        # for test_month in sorted(seen_test_loaders.keys()):
+        #     test_loader = seen_test_loaders[test_month]
+        #     metrics = validate(model, test_loader, device)
+        #     f1, acc, recall, precision = metrics
+        #     log.log(f"  {test_month}: F1={f1:.4f}, Acc={acc:.4f}")
 
-            seen_months_results['month'].append(test_month)
-            seen_months_results['f1'].append(f1)
-            seen_months_results['acc'].append(acc)
-            seen_months_results['precision'].append(precision)
-            seen_months_results['recall'].append(recall)
+        #     seen_months_results['month'].append(test_month)
+        #     seen_months_results['f1'].append(f1)
+        #     seen_months_results['acc'].append(acc)
+        #     seen_months_results['precision'].append(precision)
+        #     seen_months_results['recall'].append(recall)
 
         # 评估: 当月后一个月
         all_months_list = list(generate_month_range(inc_start, inc_end))
@@ -467,11 +473,11 @@ def run_continual_learning_unk(
     log.log(f"\nNew APIs statistics saved to {new_apis_file}")
 
     # 保存增量学习评估结果
-    seen_results_file = output_dir + "continual_learning_unk_seen_months.json"
-    with open(seen_results_file, 'w') as f:
-        json.dump(seen_months_results, f, indent=2)
+    # seen_results_file = output_dir + "continual_learning_unk_seen_months.json"
+    # with open(seen_results_file, 'w') as f:
+    #     json.dump(seen_months_results, f, indent=2)
 
-    future_results_file = output_dir + "continual_learning_unk_future_month.json"
+    future_results_file = output_dir + "continual_learning_unk_test_than_train_future_month.json"
     with open(future_results_file, 'w') as f:
         json.dump(future_month_result, f, indent=2)
 
@@ -676,25 +682,69 @@ def run_continual_learning(
 
 if __name__ == "__main__":
 
-    # ===== 配置参数 =====
-    vocab_dir = "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/vocab"
-    data_paths = {
-        'benign_root': "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/benign",
-        'malicious_root': "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/malicious",
-        'benign_out': "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/benign_call_processed",
-        'malicious_out': "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/malicious_call_processed",
-    }
+    # ===== 加载配置文件 =====
+    config_path = "./configs/default.yaml"
+    if config_path.exists():
+        config = yaml.safe_load(open(config_path))
+
+        # 数据集路径
+        base_path = config['dataset']['base_path']
+        vocab_dir = str(Path(base_path) / config['dataset']['vocab_dir'])
+        data_paths = {
+            'benign_root': str(Path(base_path) / config['dataset']['benign_root']),
+            'malicious_root': str(Path(base_path) / config['dataset']['malicious_root']),
+            'benign_out': str(Path(base_path) / config['dataset']['benign_out']),
+            'malicious_out': str(Path(base_path) / config['dataset']['malicious_out']),
+        }
+
+        # 增量学习配置
+        cl_config = config.get('continual_learning', {})
+        base_train_months = tuple(cl_config.get('base_train_months', ['2022-01', '2023-02']))
+        incremental_months = tuple(cl_config.get('incremental_months', ['2023-03', '2024-12']))
+        incremental_epochs = cl_config.get('incremental_epochs', 5)
+        memory_per_month = cl_config.get('memory_per_month', 10)
+
+        # 训练参数
+        batch_size = config['training']['batch_size']
+        seed = config['training']['seed']
+
+        # 设备配置
+        device_config = config.get('device', 'auto')
+        if device_config == 'auto':
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        else:
+            device = device_config
+
+        # 路径配置
+        pretrained_model_path = config['paths']['pretrained_model']
+    else:
+        # 配置文件不存在时使用默认值
+        vocab_dir = "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/vocab"
+        data_paths = {
+            'benign_root': "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/benign",
+            'malicious_root': "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/malicious",
+            'benign_out': "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/benign_call_processed",
+            'malicious_out': "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/malicious_call_processed",
+        }
+        base_train_months = ('2022-01', '2023-02')
+        incremental_months = ('2023-03', '2024-12')
+        incremental_epochs = 5
+        memory_per_month = 10
+        batch_size = 128
+        seed = 42
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        pretrained_model_path = "./models/base_model.pt"
 
     # 运行增量学习
     run_continual_learning_unk(
         vocab_dir=vocab_dir,
         data_paths=data_paths,
-        base_train_months=('2022-01', '2023-02'),  # 基础训练月份
-        incremental_months=('2023-03', '2024-12'),  # 增量学习月份
-        incremental_epochs=5,  # 增量学习每轮5个epoch
-        batch_size=128,
-        memory_per_month=10,
-        device="cuda" if torch.cuda.is_available() else "cpu",
-        seed=42,
-        pretrained_model_path="./models/base_model.pt"  # 加载预训练模型
+        base_train_months=base_train_months,
+        incremental_months=incremental_months,
+        incremental_epochs=incremental_epochs,
+        batch_size=batch_size,
+        memory_per_month=memory_per_month,
+        device=device,
+        seed=seed,
+        pretrained_model_path=pretrained_model_path
     )

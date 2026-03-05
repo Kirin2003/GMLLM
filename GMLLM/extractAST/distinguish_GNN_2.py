@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from pathlib import Path
 import argparse
+import yaml
 from torch_geometric.data import Data
 from torch_geometric.loader import DataLoader
 from torch_geometric.nn import GCNConv, global_mean_pool
@@ -18,6 +19,7 @@ from utils.month_utils import generate_month_range
 from plot_results import plot_monthly_metrics
 from utils.data_utils import split_train_val_test, split_train_test
 from utils.data_loader import load_vocabs, build_dataloaders, load_month_dataset
+import copy
 from utils.logger_utils import Logger
 
 # 创建日志记录器
@@ -116,22 +118,59 @@ if __name__ == "__main__":
     # =============================================================================
     # 阶段1: 配置和初始化
     # =============================================================================
-    vocab_dir = "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/vocab"
-    data_paths = {
-        'benign_root': "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/benign",
-        'malicious_root': "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/malicious",
-        'benign_out': "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/benign_call_processed",
-        'malicious_out': "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/malicious_call_processed",
-    }
-    epochs = 60
-    patience = 10  # early stopping: stop if no improvement for 10 epochs
-    batch_size = 128
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    # 加载配置文件
+    config_path = "./configs/default.yaml"
+    if config_path.exists():
+        config = yaml.safe_load(open(config_path))
+        # 数据集路径
+        base_path = config['dataset']['base_path']
+        vocab_dir = str(Path(base_path) / config['dataset']['vocab_dir'])
+        data_paths = {
+            'benign_root': str(Path(base_path) / config['dataset']['benign_root']),
+            'malicious_root': str(Path(base_path) / config['dataset']['malicious_root']),
+            'benign_out': str(Path(base_path) / config['dataset']['benign_out']),
+            'malicious_out': str(Path(base_path) / config['dataset']['malicious_out']),
+        }
+        # 训练参数
+        epochs = config['training']['epochs']
+        patience = config['training']['patience']
+        batch_size = config['training']['batch_size']
+        SEED = config['training']['seed']
+        train_ratio = config['training']['train_ratio']
+        val_ratio = config['training']['val_ratio']
+        num_workers = config['training']['num_workers']
+        # 设备配置
+        device_config = config.get('device', 'auto')
+        if device_config == 'auto':
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        else:
+            device = device_config
+        # 路径配置
+        models_dir = config['paths']['models_dir']
+        results_dir = config['paths']['results_dir']
+    else:
+        # 配置文件不存在时使用默认值
+        vocab_dir = "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/vocab"
+        data_paths = {
+            'benign_root': "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/benign",
+            'malicious_root': "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/malicious",
+            'benign_out': "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/benign_call_processed",
+            'malicious_out': "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/malicious_call_processed",
+        }
+        epochs = 60
+        patience = 10
+        batch_size = 128
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        SEED = 42
+        train_ratio = 0.8
+        val_ratio = 0.1
+        num_workers = 4
+        models_dir = "./models"
+        results_dir = "./results"
 
-    SEED = 42
     set_seed(SEED)
 
-    os.makedirs("models", exist_ok=True)
+    os.makedirs(models_dir, exist_ok=True)
 
     # =============================================================================
     # 阶段2: 加载词汇表
@@ -155,9 +194,6 @@ if __name__ == "__main__":
     val_datasets = {}     # 验证集
     test_datasets = {}    # 测试集
 
-    train_ratio = 0.8
-    val_ratio = 0.1
-
     for month in generate_month_range('2022-01', '2024-12'):
         # 加载当月数据集
         normal_dataset, malicious_dataset = load_month_dataset(month, vocab, data_paths)
@@ -176,13 +212,17 @@ if __name__ == "__main__":
 
         else:
             # 测试阶段: 80% 训练, 20% 测试
-            (normal_train, normal_test,
-             malicious_train, malicious_test) = split_train_test(
-                 normal_dataset, malicious_dataset, train_ratio=0.8
-             )
+            # (normal_train, normal_test,
+            #  malicious_train, malicious_test) = split_train_test(
+            #      normal_dataset, malicious_dataset, train_ratio=0.8
+            #  )
+
+            # 所有的数据集均用作测试集和训练集，先测试再训练
+            normal_test, malicious_test = normal_dataset, malicious_dataset
+            
 
             # 按月存储训练集和测试集
-            train_datasets[month] = (normal_train, malicious_train)
+            #train_datasets[month] = (normal_train, malicious_train)
             test_datasets[month] = (normal_test, malicious_test)
 
     # 构建累积的训练集、验证集和测试集
@@ -227,96 +267,97 @@ if __name__ == "__main__":
     # =============================================================================
     # 阶段5: 训练模型
     # =============================================================================
-    train_start = time.time()
-    log.log(f"\nTraining started at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    # train_start = time.time()
+    # log.log(f"\nTraining started at {time.strftime('%Y-%m-%d %H:%M:%S')}")
 
-    for epoch in range(1, epochs + 1):
-        train_loss, train_acc = train(model, train_loader, optimizer, criterion, device)
-        val_metrics = validate(model, val_loader, device)
-        val_f1, acc, malicious_recall, val_precision = val_metrics
+    # for epoch in range(1, epochs + 1):
+    #     train_loss, train_acc = train(model, train_loader, optimizer, criterion, device)
+    #     val_metrics = validate(model, val_loader, device)
+    #     val_f1, acc, malicious_recall, val_precision = val_metrics
 
-        history['train_loss'].append(train_loss)
-        history['train_acc'].append(train_acc)
-        history['val_f1'].append(val_f1)
-        history['val_acc'].append(acc)
-        history['val_precision'].append(val_precision)
-        history['val_recall'].append(malicious_recall)
+    #     history['train_loss'].append(train_loss)
+    #     history['train_acc'].append(train_acc)
+    #     history['val_f1'].append(val_f1)
+    #     history['val_acc'].append(acc)
+    #     history['val_precision'].append(val_precision)
+    #     history['val_recall'].append(malicious_recall)
 
-        log.log(
-            f"Epoch {epoch:03d} | Loss {train_loss:.4f} | TrainAcc {train_acc:.4f} | ValF1 {val_f1:.4f} | ValAcc {acc:.4f} | MalRecall {malicious_recall:.4f}")
+    #     log.log(
+    #         f"Epoch {epoch:03d} | Loss {train_loss:.4f} | TrainAcc {train_acc:.4f} | ValF1 {val_f1:.4f} | ValAcc {acc:.4f} | MalRecall {malicious_recall:.4f}")
 
-        if val_f1 > best_val_f1:
-            best_val_f1 = val_f1
-            torch.save(model.state_dict(), "models/base_model.pt")
-            no_improve_count = 0  # reset counter when improvement occurs
-        else:
-            no_improve_count += 1
+    #     if val_f1 > best_val_f1:
+    #         best_val_f1 = val_f1
+    #         torch.save(model.state_dict(), "models/base_model.pt")
+    #         no_improve_count = 0  # reset counter when improvement occurs
+    #     else:
+    #         no_improve_count += 1
 
-        if no_improve_count >= patience:
-            log.log(f"\nEarly stopping at epoch {epoch}! No improvement for {patience} epochs.")
-            break
+    #     if no_improve_count >= patience:
+    #         log.log(f"\nEarly stopping at epoch {epoch}! No improvement for {patience} epochs.")
+    #         break
 
-    train_time = time.time() - train_start
-    log.log(f"\nTraining completed at {time.strftime('%Y-%m-%d %H:%M:%S')}")
-    log.log(f"Training done in {train_time:.2f}s ({train_time/60:.2f} min). Best Val F1: {best_val_f1:.4f}")
+    # train_time = time.time() - train_start
+    # log.log(f"\nTraining completed at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    # log.log(f"Training done in {train_time:.2f}s ({train_time/60:.2f} min). Best Val F1: {best_val_f1:.4f}")
 
     # =============================================================================
     # 阶段6: 按月测试
     # =============================================================================
     # 加载最佳模型进行测试
-    # model.load_state_dict(torch.load("models/base_model.pt", map_location=device))
+    model.load_state_dict(torch.load("models/base_model.pt", map_location=device))
 
-    # val_period_results = {'month': [], 'f1': [], 'acc': [], 'precision': [], 'recall': []}
-    # future_test_results = {'month': [], 'f1': [], 'acc': [], 'precision': [], 'recall': []}
+    val_period_results = {'month': [], 'f1': [], 'acc': [], 'precision': [], 'recall': []}
+    future_test_results = {'month': [], 'f1': [], 'acc': [], 'precision': [], 'recall': []}
 
-    # log.log("\n=== Validation Period Test Results (2022-01 ~ 2023-02) ===")
-    # for month in sorted(test_loaders.keys()):
-    #     test_loader = test_loaders[month]
-    #     metrics = validate(model, test_loader, device)
-    #     f1, acc, malicious_recall, malicious_precision = metrics
+    log.log("\n=== Validation Period Test Results (2022-01 ~ 2023-02) ===")
+    for month in sorted(test_loaders.keys()):
+        if month > '2023-02':
+            test_loader = test_loaders[month]
+            metrics = validate(model, test_loader, device)
+            f1, acc, malicious_recall, malicious_precision = metrics
 
-    #     result_entry = {
-    #         'month': month, 'f1': f1, 'acc': acc,
-    #         'precision': malicious_precision, 'recall': malicious_recall
-    #     }
+            result_entry = {
+                'month': month, 'f1': f1, 'acc': acc,
+                'precision': malicious_precision, 'recall': malicious_recall
+            }
 
-    #     if month <= '2023-02':
-    #         # 验证期的测试结果
-    #         val_period_results['month'].append(month)
-    #         val_period_results['f1'].append(f1)
-    #         val_period_results['acc'].append(acc)
-    #         val_period_results['precision'].append(malicious_precision)
-    #         val_period_results['recall'].append(malicious_recall)
-    #     else:
-    #         # 未来测试结果
-    #         future_test_results['month'].append(month)
-    #         future_test_results['f1'].append(f1)
-    #         future_test_results['acc'].append(acc)
-    #         future_test_results['precision'].append(malicious_precision)
-    #         future_test_results['recall'].append(malicious_recall)
+        
+        #     # 验证期的测试结果
+        #     val_period_results['month'].append(month)
+        #     val_period_results['f1'].append(f1)
+        #     val_period_results['acc'].append(acc)
+        #     val_period_results['precision'].append(malicious_precision)
+        #     val_period_results['recall'].append(malicious_recall)
+        # else:
+            # 未来测试结果
+            future_test_results['month'].append(month)
+            future_test_results['f1'].append(f1)
+            future_test_results['acc'].append(acc)
+            future_test_results['precision'].append(malicious_precision)
+            future_test_results['recall'].append(malicious_recall)
 
-    #     log.log(f"{month} | F1: {f1:.4f} | Acc: {acc:.4f} | Precision: {malicious_precision:.4f} | Recall: {malicious_recall:.4f}")
+        log.log(f"{month} | F1: {f1:.4f} | Acc: {acc:.4f} | Precision: {malicious_precision:.4f} | Recall: {malicious_recall:.4f}")
 
-    # # 未来测试结果汇总
-    # log.log("\n=== Future Test Results Summary (2023-03 ~ 2024-12) ===")
-    # if len(future_test_results['month']) > 0:
-    #     avg_f1 = sum(future_test_results['f1']) / len(future_test_results['f1'])
-    #     avg_acc = sum(future_test_results['acc']) / len(future_test_results['acc'])
-    #     avg_prec = sum(future_test_results['precision']) / len(future_test_results['precision'])
-    #     avg_recall = sum(future_test_results['recall']) / len(future_test_results['recall'])
-    #     log.log(f"Average | F1: {avg_f1:.4f} | Acc: {avg_acc:.4f} | Precision: {avg_prec:.4f} | Recall: {avg_recall:.4f}")
+    # 未来测试结果汇总
+    log.log("\n=== Future Test Results Summary (2023-03 ~ 2024-12) ===")
+    if len(future_test_results['month']) > 0:
+        avg_f1 = sum(future_test_results['f1']) / len(future_test_results['f1'])
+        avg_acc = sum(future_test_results['acc']) / len(future_test_results['acc'])
+        avg_prec = sum(future_test_results['precision']) / len(future_test_results['precision'])
+        avg_recall = sum(future_test_results['recall']) / len(future_test_results['recall'])
+        log.log(f"Average | F1: {avg_f1:.4f} | Acc: {avg_acc:.4f} | Precision: {avg_prec:.4f} | Recall: {avg_recall:.4f}")
 
-    # # =============================================================================
-    # # 阶段7: 保存测试结果
-    # # =============================================================================
-    # results_dir = Path("./results")
-    # os.makedirs(results_dir, exist_ok=True)
+    # =============================================================================
+    # 阶段7: 保存测试结果
+    # =============================================================================
+    results_dir = Path("./results")
+    os.makedirs(results_dir, exist_ok=True)
     # with open(results_dir / "val_period_test_results.json", 'w') as f:
     #     json.dump(val_period_results, f, indent=2)
-    # with open(results_dir / "future_test_results.json", 'w') as f:
-    #     json.dump(future_test_results, f, indent=2)
+    with open(results_dir / "test_than_train_future_test_results.json", 'w') as f:
+        json.dump(future_test_results, f, indent=2)
 
-    # # log.log(f"Training done in {train_time:.2f}s ({train_time/60:.2f} min). Best Val F1: {best_val_f1:.4f}")
-    # log.log(f"Results saved to {results_dir}/")
-    # log.log("  - val_period_test_results.json")
-    # log.log("  - future_test_results.json")
+    # log.log(f"Training done in {train_time:.2f}s ({train_time/60:.2f} min). Best Val F1: {best_val_f1:.4f}")
+    log.log(f"Results saved to {results_dir}/")
+    log.log("  - val_period_test_results.json")
+    log.log("  - future_test_results.json")
