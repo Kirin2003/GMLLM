@@ -264,9 +264,12 @@ def run_continual_learning_unk(
     incremental_epochs: int = 5,
     batch_size: int = 128,
     memory_per_month: int = 10,
+    use_memory: bool = True,
     device: str = "cuda" if torch.cuda.is_available() else "cpu",
     seed: int = 42,
-    pretrained_model_path: str = "./models/base_model_0207.pt"
+    pretrained_model_path: str = "./models/base_model.pt",
+    result_file: str = "continual_learning_unk_test_than_train_future_month.json",
+    model_save_path: str = "./models/incremental_unk_model_"
 ):
     """
     方案1: UNK映射（对照组）
@@ -361,12 +364,13 @@ def run_continual_learning_unk(
 
     # 4. 构建基础月份记忆库
     memory_samples = []
-    for month in generate_month_range(base_start, base_end):
-        if month in train_datasets:
-            normal_train, malicious_train = train_datasets[month]
-            month_datasets = {month: (normal_train, malicious_train)}
-            new_samples = select_sample(month_datasets, max_per_month=memory_per_month)
-            memory_samples.extend(new_samples)
+    if use_memory:
+        for month in generate_month_range(base_start, base_end):
+            if month in train_datasets:
+                normal_train, malicious_train = train_datasets[month]
+                month_datasets = {month: (normal_train, malicious_train)}
+                new_samples = select_sample(month_datasets, max_per_month=memory_per_month)
+                memory_samples.extend(new_samples)
 
     print_memory_stats(memory_samples)
 
@@ -407,16 +411,21 @@ def run_continual_learning_unk(
         )
 
         # 创建记忆库loader
-        memory_loader = create_memory_loader(memory_samples, batch_size)
+        memory_loader = create_memory_loader(memory_samples, batch_size) if use_memory else None
 
         # 训练: 当月数据 + 记忆库
-        log.log(f"Training with memory replay...")
-        train_month(model, month_train_loader, memory_loader,
-                   optimizer, criterion, device, incremental_epochs)
+        if use_memory:
+            log.log(f"Training with memory replay...")
+            train_month(model, month_train_loader, memory_loader,
+                       optimizer, criterion, device, incremental_epochs)
+        else:
+            log.log(f"Training without memory replay...")
+            train_month(model, month_train_loader, None,
+                       optimizer, criterion, device, incremental_epochs)
 
         # 保存当月模型
-        model_path = f"./models/incremental_unk_model_{month}.pt"
-        os.makedirs("./models", exist_ok=True)
+        model_path = f"{model_save_path}{month}.pt"
+        os.makedirs(os.path.dirname(model_path) or "./models", exist_ok=True)
         torch.save(model.state_dict(), model_path)
         log.log(f"Model saved to {model_path}")
 
@@ -457,11 +466,12 @@ def run_continual_learning_unk(
                 future_month_result['recall'].append(recall)
 
         # 更新记忆库
-        log.log(f"Updating memory bank...")
-        month_datasets = {month: train_datasets[month]}
-        new_samples = select_sample(month_datasets, max_per_month=memory_per_month)
-        memory_samples.extend(new_samples)
-        print_memory_stats(memory_samples)
+        if use_memory:
+            log.log(f"Updating memory bank...")
+            month_datasets = {month: train_datasets[month]}
+            new_samples = select_sample(month_datasets, max_per_month=memory_per_month)
+            memory_samples.extend(new_samples)
+            print_memory_stats(memory_samples)
 
     # 保存新API统计
     output_dir = "./results/"
@@ -477,213 +487,22 @@ def run_continual_learning_unk(
     # with open(seen_results_file, 'w') as f:
     #     json.dump(seen_months_results, f, indent=2)
 
-    future_results_file = output_dir + "continual_learning_unk_test_than_train_future_month.json"
+    future_results_file = output_dir + result_file
     with open(future_results_file, 'w') as f:
         json.dump(future_month_result, f, indent=2)
 
     return model, seen_months_results, future_month_result, new_apis_stats
 
-
-def run_continual_learning(
-    vocab_dir: str,
-    data_paths: dict,
-    base_train_months: tuple = ('2022-01', '2023-02'),  # 基础训练月份
-    incremental_months: tuple = ('2023-03', '2024-12'),  # 增量学习月份
-    incremental_epochs: int = 5,  # 增量学习每轮训练轮数
-    batch_size: int = 128,
-    memory_per_month: int = 10,
-    device: str = "cuda" if torch.cuda.is_available() else "cpu",
-    seed: int = 42,
-    pretrained_model_path: str = "./models/base_model_0207.pt"  # 预训练模型路径
-):
-    """
-    运行增量学习训练流程
-
-    流程:
-    1. 阶段1: 加载预训练模型 - 直接加载 pretrained_model_path
-    2. 阶段2: 基础记忆库 - 从 base_train_months 抽取代表性样本
-    3. 阶段3: 增量学习 (incremental_months 每月)
-       - 训练: 当月数据 + memory
-       - 评估: 2022-01 ~ month+1 的指标
-       - 更新memory: 加入当月代表性样本
-
-    Args:
-        vocab_dir: 词汇表目录
-        data_paths: 数据路径字典
-        base_train_months: 基础训练月份范围（用于构建记忆库）
-        incremental_months: 增量学习月份范围
-        incremental_epochs: 增量学习每轮训练轮数
-        batch_size: 批次大小
-        memory_per_month: 每月记忆库样本数
-        device: 设备
-        seed: 随机种子
-        pretrained_model_path: 预训练模型路径
-    """
-    # 设置随机种子
-    set_seed(seed)
-
-    # 1. 加载词汇表
-    name2idx, type2idx, behavior2idx, edge_type2idx = load_vocabs(vocab_dir)
-    vocab = {'name2idx': name2idx, 'type2idx': type2idx,
-             'behavior2idx': behavior2idx, 'edge_type2idx': edge_type2idx}
-
-    # 初始化
-    model, optimizer, criterion, device = None, None, None, device
-    train_datasets = {}  # 训练集 {month: (normal_train, malicious_train)}
-    test_datasets = {}    # 测试集 {month: (normal_test, malicious_test)}
-
-
-    # =========================================================================
-    # 阶段2: 构建基础记忆库
-    # =========================================================================
-    print("\n" + "="*60)
-    print("Phase 2: Building base memory bank")
-    print("="*60)
-
-    base_start, base_end = base_train_months
-    inc_start, inc_end = incremental_months
-
-    # 加载基础训练月份数据（使用8:1:1划分）
-    for month in generate_month_range(base_start, base_end):
-        normal_ds, malicious_ds = load_month_dataset(month, vocab, data_paths)
-        print(f"  {month}: {len(normal_ds)} normal, {len(malicious_ds)} malicious")
-
-        # 划分数据集
-        (normal_train, normal_val, normal_test,
-         malicious_train, malicious_val, malicious_test) = split_train_val_test(normal_ds, malicious_ds)
-
-        # 存储训练数据用于构建记忆库
-        train_datasets[month] = (normal_train, malicious_train)
-        # 存储测试集
-        test_datasets[month] = (normal_test, malicious_test)
-
-    # 加载增量月份数据（使用8:2划分）
-    for month in generate_month_range(inc_start, inc_end):
-        normal_ds, malicious_ds = load_month_dataset(month, vocab, data_paths)
-        print(f"  {month}: {len(normal_ds)} normal, {len(malicious_ds)} malicious")
-
-        # 划分数据集 8:2
-        (normal_train, normal_test,
-         malicious_train, malicious_test) = split_train_test(normal_ds, malicious_ds)
-
-        # 训练数据存储用于增量训练
-        train_datasets[month] = (normal_train, malicious_train)
-        # 测试数据存储
-        test_datasets[month] = (normal_test, malicious_test)
-
-    # 构建基础月份记忆库
-    memory_samples = []  # 记忆库
-    for month in generate_month_range(base_start, base_end):
-        if month in train_datasets:
-            normal_train, malicious_train = train_datasets[month]
-            month_datasets = {month: (normal_train, malicious_train)}
-            new_samples = select_sample(month_datasets, max_per_month=memory_per_month)
-            memory_samples.extend(new_samples)
-
-    print_memory_stats(memory_samples)
-
-    # =========================================================================
-    # 阶段3: 增量学习
-    # =========================================================================
-    print("\n" + "="*60)
-    print("Phase 3: Incremental Learning")
-    print("="*60)
-
-    # 收集评估结果
-    seen_months_results = {'month': [], 'f1': [], 'acc': [], 'precision': [], 'recall': []}
-    future_month_results = {'month': [], 'f1': [], 'acc': [], 'precision': [], 'recall': []}
-
-    for month in generate_month_range(inc_start, inc_end):
-        print(f"\n--- Month: {month} ---")
-
-        # 从已划分的数据集中获取当月训练数据
-        normal_train, malicious_train = train_datasets[month]
-        month_train_dataset = ConcatDataset([normal_train, malicious_train])
-        month_train_loader = DataLoader(
-            month_train_dataset, batch_size=batch_size, shuffle=True, num_workers=4
-        )
-
-        # 创建记忆库loader
-        memory_loader = create_memory_loader(memory_samples, batch_size)
-
-        # 训练: 当月数据 + 记忆库
-        print(f"Training with memory replay...")
-        train_month(model, month_train_loader, memory_loader,
-                   optimizer, criterion, device, incremental_epochs)
-
-        # 保存当月模型
-        model_path = f"./models/incremental_model_{month}.pt"
-        os.makedirs("./models", exist_ok=True)
-        torch.save(model.state_dict(), model_path)
-        print(f"Model saved to {model_path}")
-
-        # 评估: 2022-01 ~ month 的所有已见月份
-        # 重新构建包含当月的测试loaders
-        seen_test_datasets = {m: test_datasets[m] for m in test_datasets if m <= month}
-        seen_test_loaders = build_dataloaders(seen_test_datasets, batch_size, shuffle=False)
-
-        print(f"Evaluating on months up to {month}...")
-        for test_month in sorted(seen_test_loaders.keys()):
-            test_loader = seen_test_loaders[test_month]
-            metrics = validate(model, test_loader, device)
-            f1, acc, recall, precision = metrics
-            print(f"  {test_month}: F1={f1:.4f}, Acc={acc:.4f}")
-
-            # 记录已见月份结果（用于画图）
-            seen_months_results['month'].append(test_month)
-            seen_months_results['f1'].append(f1)
-            seen_months_results['acc'].append(acc)
-            seen_months_results['precision'].append(precision)
-            seen_months_results['recall'].append(recall)
-
-        # 评估: 当月后一个月
-        from utils.month_utils import generate_month_range as gen_month_range
-        all_months_list = list(gen_month_range(inc_start, inc_end))
-        month_idx = all_months_list.index(month)
-        if month_idx + 1 < len(all_months_list):
-            next_month = all_months_list[month_idx + 1]
-            if next_month in test_datasets:
-                print(f"Evaluating on next month {next_month}...")
-                next_test_loader = build_dataloaders({next_month: test_datasets[next_month]}, batch_size, shuffle=False)
-                next_loader = next_test_loader[next_month]
-                metrics = validate(model, next_loader, device)
-                f1, acc, recall, precision = metrics
-                print(f"  {next_month}: F1={f1:.4f}, Acc={acc:.4f}")
-
-                # 记录后一个月结果（用于画图）
-                future_month_results['month'].append(next_month)
-                future_month_results['f1'].append(f1)
-                future_month_results['acc'].append(acc)
-                future_month_results['precision'].append(precision)
-                future_month_results['recall'].append(recall)
-
-        # 更新记忆库: 加入当月代表性样本
-        print(f"Updating memory bank...")
-        month_datasets = {month: train_datasets[month]}
-        new_samples = select_sample(month_datasets, max_per_month=memory_per_month)
-        memory_samples.extend(new_samples)
-        print_memory_stats(memory_samples)
-
-    output_dir = "./results/"
-
-    # 保存增量学习评估结果
-    seen_results_file = output_dir + "continual_learning_seen_months.json"
-    save_results(seen_months_results, seen_results_file)
-
-    future_results_file = output_dir + "continual_learning_future_month.json"
-    save_results(future_month_results, future_results_file)
-
-    # 绘制增量学习评估曲线
-    print("\nPlotting incremental learning results...")
-    plot_monthly_incremental_results(seen_months_results, future_month_results, output_dir)
-
-    return model, seen_months_results, future_month_results
-
-
 if __name__ == "__main__":
+    import argparse
+
+    # ===== 解析命令行参数 =====
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', type=str, default='./configs/default.yaml', help='配置文件路径')
+    args = parser.parse_args()
 
     # ===== 加载配置文件 =====
-    config_path = "./configs/default.yaml"
+    config_path = args.config
     config = yaml.safe_load(open(config_path))
 
     # 数据集路径
@@ -702,6 +521,7 @@ if __name__ == "__main__":
     incremental_months = tuple(cl_config.get('incremental_months', ['2023-03', '2024-12']))
     incremental_epochs = cl_config.get('incremental_epochs', 5)
     memory_per_month = cl_config.get('memory_per_month', 10)
+    use_memory = cl_config.get('use_memory', True)
 
     # 训练参数
     batch_size = config['training']['batch_size']
@@ -715,7 +535,17 @@ if __name__ == "__main__":
         device = device_config
 
     # 路径配置
-    pretrained_model_path = config['paths']['pretrained_model']
+    paths_config = config.get('paths', {})
+    pretrained_model_path = paths_config.get('pretrained_model', './models/base_model.pt')
+
+    # 结果文件配置 (支持多种配置方式)
+    results_config = config.get('results', {})
+    result_file = results_config.get('future_month')        
+
+    # 模型保存路径配置 (组合 models_dir 和 prefix)
+    models_dir = paths_config.get('models_dir', './models')
+    model_prefix = paths_config.get('prefix')
+    model_save_path = f"{models_dir}/{model_prefix}"
 
     # 运行增量学习
     run_continual_learning_unk(
@@ -726,7 +556,10 @@ if __name__ == "__main__":
         incremental_epochs=incremental_epochs,
         batch_size=batch_size,
         memory_per_month=memory_per_month,
+        use_memory=use_memory,
         device=device,
         seed=seed,
-        pretrained_model_path=pretrained_model_path
+        pretrained_model_path=pretrained_model_path,
+        result_file=result_file,
+        model_save_path=model_save_path
     )

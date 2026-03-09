@@ -195,6 +195,7 @@ def run_base_model(
     vocab_dir: str,
     data_paths: dict,
     train_months: tuple = ('2022-01', '2023-02'),
+    incremental_months: tuple = ('2023-03', '2024-12'),
     epochs: int = 50,
     patience: int = 10,
     batch_size: int = 128,
@@ -202,7 +203,8 @@ def run_base_model(
     val_ratio: float = 0.1,
     device: str = "cuda",
     seed: int = 42,
-    model_save_path: str = "./models/base_model.pt"
+    model_save_path: str = "./models/base_model.pt",
+    result_file: str = "test_than_train_future_test_results.json"
 ):
     """运行基础模型训练和测试流程"""
     set_seed(seed)
@@ -228,16 +230,19 @@ def run_base_model(
     for month in generate_month_range(train_start, train_end):
         normal_ds, malicious_ds = load_month_dataset(month, vocab, data_paths)
 
-        if month <= '2023-02':
-            (normal_train, normal_val, normal_test,
-             malicious_train, malicious_val, malicious_test) = split_train_val_test(
-                 normal_ds, malicious_ds, train_ratio, val_ratio
-            )
-            train_datasets[month] = (normal_train, malicious_train)
-            val_datasets[month] = (normal_val, malicious_val)
-            test_datasets[month] = (normal_test, malicious_test)
-        else:
-            test_datasets[month] = (normal_ds, malicious_ds)
+        (normal_train, normal_val, normal_test,
+            malicious_train, malicious_val, malicious_test) = split_train_val_test(
+                normal_ds, malicious_ds, train_ratio, val_ratio
+        )
+        train_datasets[month] = (normal_train, malicious_train)
+        val_datasets[month] = (normal_val, malicious_val)
+        test_datasets[month] = (normal_test, malicious_test)
+    
+    # 加载增量月份数据
+    inc_start, inc_end = incremental_months
+    for month in generate_month_range(inc_start, inc_end):
+        normal_ds, malicious_ds = load_month_dataset(month, vocab, data_paths)
+        test_datasets[month] = (normal_ds, malicious_ds)
 
     # 构建累积的训练集、验证集
     train_dataset = ConcatDataset([
@@ -269,17 +274,20 @@ def run_base_model(
     criterion = torch.nn.CrossEntropyLoss()
 
     # 训练模型
-    model, best_val_f1 = train_model(
-        model=model,
-        train_loader=train_loader,
-        val_loader=val_loader,
-        optimizer=optimizer,
-        criterion=criterion,
-        device=device,
-        epochs=epochs,
-        patience=patience,
-        model_save_path=model_save_path
-    )
+    # model, best_val_f1 = train_model(
+    #     model=model,
+    #     train_loader=train_loader,
+    #     val_loader=val_loader,
+    #     optimizer=optimizer,
+    #     criterion=criterion,
+    #     device=device,
+    #     epochs=epochs,
+    #     patience=patience,
+    #     model_save_path=model_save_path
+    # )
+
+    # 加载最优模型
+    model.load_state_dict(torch.load(model_save_path, map_location=device))
 
     # 测试模型
     test_results = test_model(
@@ -292,7 +300,7 @@ def run_base_model(
     # 保存结果
     results_dir = Path("./results")
     os.makedirs(results_dir, exist_ok=True)
-    with open(results_dir / "test_than_train_future_test_results.json", 'w') as f:
+    with open(results_dir / result_file, 'w') as f:
         json.dump(test_results, f, indent=2)
 
     log.log(f"Results saved to {results_dir}/")
@@ -337,12 +345,18 @@ if __name__ == "__main__":
     # 增量学习配置
     cl_config = config.get('continual_learning', {})
     base_train_months = tuple(cl_config.get('base_train_months', ['2022-01', '2023-02']))
+    incremental_months = tuple(cl_config.get('incremental_months', ['2023-03', '2024-12']))
+
+    # 结果文件配置
+    results_config = config.get('results', {})
+    base_model_result_file = results_config.get('base_model', 'test_than_train_future_test_results.json')
 
     # 运行训练和测试
     run_base_model(
         vocab_dir=vocab_dir,
         data_paths=data_paths,
         train_months=base_train_months,
+        incremental_months=incremental_months,
         epochs=epochs,
         patience=patience,
         batch_size=batch_size,
@@ -350,5 +364,6 @@ if __name__ == "__main__":
         val_ratio=val_ratio,
         device=device,
         seed=seed,
-        model_save_path=f"{models_dir}/base_model.pt"
+        model_save_path=f"{models_dir}/base_model.pt",
+        result_file=base_model_result_file
     )
