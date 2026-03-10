@@ -1,0 +1,27 @@
+{
+  "provider": "qwen",
+
+  "qwen": {
+    "model": "qwen-plus",
+    "api_key_env": "OPENAI_API_KEY",
+    "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  },
+
+  "openai": {
+    "model": "gpt-4o",
+    "api_key_env": "OPENAI_API_KEY"
+  },
+
+  "azure": {
+    "api_version": "2023-07-01-preview",
+    "deployment": "your_deployment_name",
+    "endpoint": "https://your-openai-endpoint.com",
+    "api_key_env": "AZURE_OPENAI_API_KEY"
+  },
+
+  "local": {
+    "model": "qwen2.5:7b",
+    "base_url": "http://localhost:11434/v1",
+    "api_key": "ollama"
+  }
+}

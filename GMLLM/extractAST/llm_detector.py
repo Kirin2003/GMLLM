@@ -4,12 +4,14 @@ from pathlib import Path
 from prompts import PROMPT_DATA, PROMPT_COMM
 from typing import Dict, List, Optional
 from rules_fallback import BEHAVIOR_RULES, KNOWN_LIBS, BUILTIN_DECOS
+from llm_client import get_llm_client
 ALL_BEHAVIOR_TAGS: List[str] = [k for k in BEHAVIOR_RULES.keys()]
 SYS_prompt = PROMPT_DATA
 class LLMBehaviorDetector:
     def __init__(
         self,
-        model_name: str = "gpt-4o",
+        model_name: str = "qwen-plus",
+        provider: str = "qwen",
         use_rule_fallback: bool = True,
         cache_path: Optional[Path] = None,
         temperature: float = 0.0,
@@ -17,6 +19,7 @@ class LLMBehaviorDetector:
         timeout_s: float = 120.0,
     ):
         self.model_name = model_name
+        self.provider = provider
         self.use_rule_fallback = use_rule_fallback
         self.temperature = temperature
         self.max_retries = max_retries
@@ -29,8 +32,7 @@ class LLMBehaviorDetector:
                 self.cache = json.loads(self.cache_path.read_text(encoding="utf-8"))
             except Exception:
                 self.cache = {}
-        self._openai_client = None
-        self._init_openai_client()
+        self._openai_client = get_llm_client(provider, model_name)
     def detect_behaviors(self, node_info: Dict) -> List[str]:
         key = self._key(node_info)
         if key in self.cache:
@@ -88,25 +90,6 @@ class LLMBehaviorDetector:
             except Exception:
                 pass
         return out
-    def _init_openai_client(self):
-        api_key = os.getenv("OPENAI_API_KEY", "").strip()
-        if not api_key:
-            return
-        try:
-            from openai import OpenAI  
-            # 使用GPT
-            # self._openai_client = OpenAI(api_key=api_key)
-            # 使用qwen
-            self._openai_client = OpenAI(
-                api_key=api_key, 
-                base_url="https://dashscope.aliyuncs.com/compatible-mode/v1")
-        except Exception:
-            try:
-                import openai  
-                openai.api_key = api_key
-                self._openai_client = openai
-            except Exception:
-                self._openai_client = None
     def _llm_classify(self, node_info: Dict) -> List[str]:
         sys_prompt = SYS_prompt
         user_prompt = json.dumps({"node_info": node_info, "allowed_labels": ALL_BEHAVIOR_TAGS}, ensure_ascii=False)
@@ -131,28 +114,16 @@ class LLMBehaviorDetector:
             raise last_err
         return []
     def _chat_once(self, system_prompt: str, user_prompt: str) -> str:
-        if hasattr(self._openai_client, "chat"):  
-            resp = self._openai_client.chat.completions.create(
-                model=self.model_name,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                temperature=self.temperature,
-                timeout=self.timeout_s,
-            )
-            return resp.choices[0].message.content or ""
-        else:  
-            resp = self._openai_client.ChatCompletion.create(
-                model=self.model_name,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                temperature=self.temperature,
-                request_timeout=self.timeout_s,
-            )
-            return resp["choices"][0]["message"]["content"]
+        resp = self._openai_client.chat.completions.create(
+            model=self.model_name,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=self.temperature,
+            timeout=self.timeout_s,
+        )
+        return resp.choices[0].message.content or ""
     def _normalize_labels(self, labels: List[str]) -> List[str]:
         uniq = {lb for lb in labels if lb in ALL_BEHAVIOR_TAGS}
         return [lb for lb in ALL_BEHAVIOR_TAGS if lb in uniq]

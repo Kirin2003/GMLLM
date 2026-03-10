@@ -1,0 +1,10 @@
+{
+    "package_name": "AadhaarCrypt-1.0",
+    "verdict": "Malicious",
+    "reasoning": "AadhaarCrypt/__init__.py + os.system(\"ping %s\" % domain) + exfiltrates system info via DNS tunneling to malicious domain  \n AadhaarCrypt/__init__.py + urllib.request.urlopen() / requests.post() / requests.get() + sends encoded hostname/username/package/path to C2 server over HTTP  \n AadhaarCrypt/__init__.py + base64.b64encode() + data encoding + obfuscation of sensitive host information before exfiltration",
+    "token_usage": {
+        "prompt_tokens": 927,
+        "completion_tokens": 113,
+        "total_tokens": 1040
+    }
+}
