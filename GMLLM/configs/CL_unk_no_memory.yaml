@@ -38,26 +38,19 @@ continual_learning:
   base_train_months: ['2022-01', '2023-02']
   incremental_months: ['2023-03', '2024-12']
   incremental_epochs: 5
-  memory_per_month: 20
+  memory_per_month: 10
   use_memory: False
 
 # 结果文件配置
 results:
-  base_model: "test_than_train_future_test_results.json"
-  continual_learning_unk: "continual_learning_unk_test_than_train_future_month.json"
-  continual_learning_unk_no_memory: "continual_learning_unk_no_memory_test_than_train_future_month.json"
-
-# 模型保存配置
-model_prefix:
-  base: "base_model"
-  continual_learning_unk: "incremental_unk_model_"
-  continual_learning_unk_no_memory: "incremental_unk_no_memory_model_"
+  future_month: "continual_learning_unk_no_memory_test_than_train_future_month.json"
 
 # 路径配置
 paths:
   models_dir: "./models"
-  results_dir: "./results"
+  results_dir: "../results"
   pretrained_model: "./models/base_model.pt"
+  prefix: "incremental_unk_no_memory_model_"
 
 # 设备配置 (auto/cuda/cpu)
 device: "auto"

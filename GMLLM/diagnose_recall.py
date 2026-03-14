@@ -114,7 +114,7 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # 输出路径
-    output_dir = Path("/Data2/hxq/GMLLM/GMLLM/extractAST")
+    output_dir = Path("../results")
     txt_path = output_dir / "diagnosis_results.txt"
     json_path = output_dir / "diagnosis_results.json"
 

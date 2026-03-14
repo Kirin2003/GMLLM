@@ -3,7 +3,7 @@ import re
 import matplotlib.pyplot as plt
 
 # 读取log文件
-log_path = '/Data2/hxq/GMLLM/GMLLM/extractAST/log/train_base_model_0303.log'
+log_path = '../log/train_base_model_0303.log'
 
 epochs = []
 losses = []
@@ -36,7 +36,7 @@ axes[1].set_title('Validation F1 over Epochs')
 axes[1].grid(True, alpha=0.3)
 
 plt.tight_layout()
-plt.savefig('/Data2/hxq/GMLLM/GMLLM/extractAST/log/training_curves.png', dpi=150)
+plt.savefig('../log/training_curves.png', dpi=150)
 plt.show()
 
 print(f"Total epochs: {len(epochs)}")

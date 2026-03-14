@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 from openai import OpenAI
 from rules_fallback import BEHAVIOR_RULES
-from utils.logger_utils import Logger
+from ..utils.logger_utils import Logger
 
 # 获取所有恶意行为标签
 ALL_BEHAVIOR_TAGS = list(BEHAVIOR_RULES.keys())
@@ -201,8 +201,8 @@ def analyze_month_apis(client, apis, existing_behaviors, model="qwen-max", max_a
     return results, new_rules_suggestions
 
 def main():
-    results_path = "/Data2/hxq/GMLLM/GMLLM/extractAST/external_api_analysis_results.json"
-    rules_path = "/Data2/hxq/GMLLM/GMLLM/extractAST/synth_rules.json"
+    results_path = "external_api_analysis_results.json"
+    rules_path = "synth_rules.json"
     output_path = "/Data2/hxq/GMLLM/api_malicious_analysis_results.json"
     new_rules_path = "/Data2/hxq/GMLLM/new_rules_suggestions.json"
 

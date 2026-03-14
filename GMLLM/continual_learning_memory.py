@@ -21,15 +21,15 @@ from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
 import random
 import numpy as np
 import time
-from utils.month_utils import generate_month_range
+from ..utils.month_utils import generate_month_range
 from plot_results import plot_monthly_metrics, plot_monthly_incremental_results
-from utils.data_utils import split_train_val_test, split_train_test
-from utils.data_loader import load_vocabs, load_month_dataset, build_dataloaders, load_dict
+from ..utils.data_utils import split_train_val_test, split_train_test
+from ..utils.data_loader import load_vocabs, load_month_dataset, build_dataloaders, load_dict
 import copy
 
 # 从 distinguish_GNN_2 导入模型定义
 from distinguish_GNN_2 import GCNWithBehavior, set_seed, validate
-from utils.logger_utils import Logger
+from ..utils.logger_utils import Logger
 log = Logger("continual_learning.log")
 
 

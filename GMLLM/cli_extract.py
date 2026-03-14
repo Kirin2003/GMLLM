@@ -7,8 +7,8 @@ import yaml
 from graph_builder import ProjectGraphBuilder
 from llm_detector import LLMBehaviorDetector
 from exporter import save_call_graph
-from utils.month_utils import generate_month_range
-from utils.logger_utils import Logger
+from ..utils.month_utils import generate_month_range
+from ..utils.logger_utils import Logger
 log = Logger("batch_extract.log")
 
 def extract_call_graph(detector: LLMBehaviorDetector,

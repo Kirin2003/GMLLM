@@ -19,9 +19,9 @@ import argparse
 from datetime import datetime
 
 from distinguish_GNN_2 import GCNWithBehavior, load_dict, set_seed
-from utils.data_loader import load_vocabs, load_month_dataset
-from utils.data_utils import split_train_test
-from utils.logger_utils import Logger as Log
+from ..utils.data_loader import load_vocabs, load_month_dataset
+from ..utils.data_utils import split_train_test
+from ..utils.logger_utils import Logger as Log
 
 # 全局日志对象
 log = None
