@@ -429,23 +429,6 @@ def run_continual_learning_unk(
         torch.save(model.state_dict(), model_path)
         log.log(f"Model saved to {model_path}")
 
-        # 评估: 所有已见月份
-        # seen_test_datasets = {m: test_datasets[m] for m in test_datasets if m <= month}
-        # seen_test_loaders = build_dataloaders(seen_test_datasets, batch_size, shuffle=False)
-
-        # log.log(f"Evaluating on months up to {month}...")
-        # for test_month in sorted(seen_test_loaders.keys()):
-        #     test_loader = seen_test_loaders[test_month]
-        #     metrics = validate(model, test_loader, device)
-        #     f1, acc, recall, precision = metrics
-        #     log.log(f"  {test_month}: F1={f1:.4f}, Acc={acc:.4f}")
-
-        #     seen_months_results['month'].append(test_month)
-        #     seen_months_results['f1'].append(f1)
-        #     seen_months_results['acc'].append(acc)
-        #     seen_months_results['precision'].append(precision)
-        #     seen_months_results['recall'].append(recall)
-
         # 评估: 当月后一个月
         all_months_list = list(generate_month_range(inc_start, inc_end))
         month_idx = all_months_list.index(month)
@@ -474,18 +457,13 @@ def run_continual_learning_unk(
             print_memory_stats(memory_samples)
 
     # 保存新API统计
-    output_dir = "./results/"
+    output_dir = "../results/"
     os.makedirs(output_dir, exist_ok=True)
 
     new_apis_file = output_dir + "new_apis_statistics.json"
     with open(new_apis_file, 'w') as f:
         json.dump(new_apis_stats, f, indent=2)
     log.log(f"\nNew APIs statistics saved to {new_apis_file}")
-
-    # 保存增量学习评估结果
-    # seen_results_file = output_dir + "continual_learning_unk_seen_months.json"
-    # with open(seen_results_file, 'w') as f:
-    #     json.dump(seen_months_results, f, indent=2)
 
     future_results_file = output_dir + result_file
     with open(future_results_file, 'w') as f:
