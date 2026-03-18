@@ -39,7 +39,7 @@ continual_learning:
   incremental_months: ['2023-03', '2024-12']
   incremental_epochs: 5
   memory_per_month: 10
-  use_memory: False
+  use_memory: True
   memory_ratio: 1  # 每训练N个新batch，训练1个记忆库batch
 
 # 结果文件配置

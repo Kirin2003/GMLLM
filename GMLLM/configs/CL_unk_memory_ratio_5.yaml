@@ -3,9 +3,8 @@ parent: "default.yaml"
 
 # 增量学习配置（覆盖 parent 中的配置）
 continual_learning:
-  memory_per_month: 10
-  use_memory: True
+  memory_ratio: 5  # 每训练5个新batch，训练1个记忆库batch
 
 # 结果文件配置（覆盖 parent 中的配置）
 results:
-  future_month: "test_than_train_future_test_results.json"
+  future_month: "CL_unk_memory_ratio_5_test_than_train_future_month.json"

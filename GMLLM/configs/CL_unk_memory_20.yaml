@@ -4,7 +4,6 @@ parent: "default.yaml"
 # 增量学习配置
 continual_learning:
   memory_per_month: 20
-  use_memory: True
 
 # 结果文件配置
 results:
