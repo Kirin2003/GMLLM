@@ -3,8 +3,6 @@ parent: "default.yaml"
 
 # 增量学习配置（覆盖 parent 中的配置）
 continual_learning:
-  memory_per_month: 20
-  use_memory: False
   memory_ratio: 3  # 每训练3个新batch，训练1个记忆库batch
 
 # 结果文件配置（覆盖 parent 中的配置）

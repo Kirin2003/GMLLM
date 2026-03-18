@@ -38,7 +38,7 @@ continual_learning:
   base_train_months: ['2022-01', '2023-02']
   incremental_months: ['2023-03', '2024-12']
   incremental_epochs: 5
-  memory_per_month: 20
+  memory_per_month: 10
   use_memory: False
   memory_ratio: 1  # 每训练N个新batch，训练1个记忆库batch
 
