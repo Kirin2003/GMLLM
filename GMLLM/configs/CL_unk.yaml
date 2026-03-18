@@ -39,18 +39,18 @@ continual_learning:
   incremental_months: ['2023-03', '2024-12']
   incremental_epochs: 5
   memory_per_month: 10
-  use_memory: False
+  use_memory: True
 
 # 结果文件配置
 results:
-  future_month: "CL_unk_no_memory_test_than_train_future_month.json"
+  future_month: "CL_unk_test_than_train_future_month.json"
 
 # 路径配置
 paths:
   models_dir: "./models"
   results_dir: "../results"
   pretrained_model: "./models/base_model.pt"
-  prefix: "incremental_unk_no_memory_model_"
+  prefix: "incremental_unk_model_"
 
 # 设备配置 (auto/cuda/cpu)
 device: "auto"

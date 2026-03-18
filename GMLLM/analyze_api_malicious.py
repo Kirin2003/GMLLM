@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 from openai import OpenAI
 from rules_fallback import BEHAVIOR_RULES
-from ..utils.logger_utils import Logger
+from utils.logger_utils import Logger
 
 # 获取所有恶意行为标签
 ALL_BEHAVIOR_TAGS = list(BEHAVIOR_RULES.keys())

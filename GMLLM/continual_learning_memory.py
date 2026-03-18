@@ -8,28 +8,21 @@ import os
 import json
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from pathlib import Path
 import argparse
 import yaml
-from torch_geometric.data import Data, Dataset
+from torch_geometric.data import Dataset
 from torch_geometric.loader import DataLoader
-from torch_geometric.nn import GCNConv, global_mean_pool
-from generate_graph_data_fromJson import CallGraphDatasetFull_Lazy
-from torch.utils.data import ConcatDataset, Subset
-from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
+from torch.utils.data import ConcatDataset
 import random
-import numpy as np
-import time
-from ..utils.month_utils import generate_month_range
-from plot_results import plot_monthly_metrics, plot_monthly_incremental_results
-from ..utils.data_utils import split_train_val_test, split_train_test
-from ..utils.data_loader import load_vocabs, load_month_dataset, build_dataloaders, load_dict
+from utils.month_utils import generate_month_range
+from utils.data_utils import split_train_val_test
+from utils.data_loader import load_vocabs, load_month_dataset, build_dataloaders
 import copy
 
 # 从 distinguish_GNN_2 导入模型定义
-from distinguish_GNN_2 import GCNWithBehavior, set_seed, validate
-from ..utils.logger_utils import Logger
+from distinguish_GNN_2 import GCNWithBehavior, validate
+from utils.logger_utils import Logger
 log = Logger("continual_learning.log")
 
 

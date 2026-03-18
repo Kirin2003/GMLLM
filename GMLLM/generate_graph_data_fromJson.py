@@ -8,7 +8,7 @@ import yaml
 from tqdm import tqdm
 from torch_geometric.data import Dataset
 from torch_geometric.data import Data
-from ..utils.month_utils import generate_month_range
+from utils.month_utils import generate_month_range
 class CallGraphDatasetFull_Lazy(Dataset):
     def __init__(self, root_dir, output_dir=None, fixed_label=None,
                  name2idx=None, type2idx=None, edge_type2idx=None, behavior2idx=None,
