@@ -4,6 +4,12 @@
 - 记忆库: 每月抽取最多10个样本，保持正负样本1:1
 """
 
+import sys
+from pathlib import Path
+
+# 将上级目录加入 Python 搜索路径
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import os
 import json
 import torch
@@ -264,6 +270,9 @@ def run_continual_learning_unk(
     result_file: str = "continual_learning_unk_test_than_train_future_month.json",
     model_save_path: str = "./models/incremental_unk_model_"
 ):
+    output_dir = "../results/"
+    future_results_file = output_dir + result_file
+    print(f"Results will be saved to: {future_results_file}")
     """
     方案1: UNK映射（对照组）
     - 使用固定词汇表（基础训练月份构建的词汇表）

@@ -7,6 +7,12 @@
 2. 显示正确的结果是什么
 3. 统计UNK模型相比于baseline模型，恶意样本和良性样本的正确数提升了多少
 """
+import sys
+from pathlib import Path
+
+# 将上级目录加入 Python 搜索路径
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import json
 import torch
 import torch.nn.functional as F

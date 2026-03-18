@@ -3,9 +3,14 @@
 """
 使用 Qwen 批量分析新增外部API的恶意性，并生成合成规则更新 synth_rules.json
 """
+import sys
+from pathlib import Path
+
+# 将上级目录加入 Python 搜索路径
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import json
 import os
-import sys
 import time
 import re
 from pathlib import Path
