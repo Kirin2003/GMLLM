@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 from pathlib import Path
 import yaml
+from utils.config_utils import load_config
 from torch_geometric.nn import GCNConv, global_mean_pool
 from torch.utils.data import ConcatDataset
 from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
@@ -314,7 +315,7 @@ def run_base_model(
 if __name__ == "__main__":
     # 加载配置文件
     config_path = "./configs/default.yaml"
-    config = yaml.safe_load(open(config_path))
+    config = load_config(config_path)
 
     # 数据集路径
     base_path = config['dataset']['base_path']

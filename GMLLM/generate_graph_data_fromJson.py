@@ -11,6 +11,7 @@ import torch
 from pathlib import Path
 import argparse
 import yaml
+from utils.config_utils import load_config
 from tqdm import tqdm
 from torch_geometric.data import Dataset
 from torch_geometric.data import Data
@@ -214,7 +215,7 @@ def clean_dir(path):
 if __name__ == "__main__":
     # 加载配置文件
     config_path = "./configs/default.yaml"
-    config = yaml.safe_load(open(config_path))
+    config = load_config(config_path)
 
     # 从配置中读取路径
     base_path = config['dataset']['base_path']

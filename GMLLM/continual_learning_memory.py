@@ -17,6 +17,7 @@ import torch.nn as nn
 from pathlib import Path
 import argparse
 import yaml
+from utils.config_utils import load_config
 from torch_geometric.data import Dataset
 from torch_geometric.loader import DataLoader
 from torch.utils.data import ConcatDataset
@@ -89,10 +90,11 @@ class MemoryDataset(Dataset):
         return data
 
 
-def train_with_CL(model, new_task_loader, memory_loader, optimizer, criterion, device):
+def train_with_CL(model, new_task_loader, memory_loader, optimizer, criterion, device, memory_ratio: int = 1):
     """
-    1:1 交替训练
-    [新任务batch1] -> [记忆库batch1] -> [新任务batch2] -> [记忆库batch2] -> ...
+    交替训练，可配置频率
+    memory_ratio=1: 1:1 交替训练 [新任务batch] -> [记忆库batch] -> ...
+    memory_ratio=3: 3:1 交替训练 [新任务batch x3] -> [记忆库batch] -> ...
 
     Args:
         model: GCNWithBehavior 模型
@@ -101,6 +103,7 @@ def train_with_CL(model, new_task_loader, memory_loader, optimizer, criterion, d
         optimizer: 优化器
         criterion: 损失函数
         device: 设备 (cuda/cpu)
+        memory_ratio: 每训练N个新batch，训练1个记忆库batch（默认1）
 
     Returns:
         (avg_loss, accuracy)
@@ -111,25 +114,33 @@ def train_with_CL(model, new_task_loader, memory_loader, optimizer, criterion, d
     new_iter = iter(new_task_loader)
     mem_iter = iter(memory_loader) if memory_loader else None
 
-    while True:
-        # 训练新任务batch
-        try:
-            data = next(new_iter)
-            data = data.to(device)
-            optimizer.zero_grad()
-            out = model(data)
-            loss = criterion(out, data.y)
-            loss.backward()
-            optimizer.step()
+    new_batch_count = 0
 
-            pred = out.argmax(dim=1)
-            correct += (pred == data.y).sum().item()
-            total += data.num_graphs
-            total_loss += loss.item() * data.num_graphs
-        except StopIteration:
+    while True:
+        # 训练新任务batch (连续训练memory_ratio个)
+        for _ in range(memory_ratio):
+            try:
+                data = next(new_iter)
+                data = data.to(device)
+                optimizer.zero_grad()
+                out = model(data)
+                loss = criterion(out, data.y)
+                loss.backward()
+                optimizer.step()
+
+                pred = out.argmax(dim=1)
+                correct += (pred == data.y).sum().item()
+                total += data.num_graphs
+                total_loss += loss.item() * data.num_graphs
+                new_batch_count += 1
+            except StopIteration:
+                break
+
+        # 检查新任务数据是否已经结束
+        if new_batch_count == 0:
             break
 
-        # 训练记忆库batch (1:1 交替)
+        # 训练记忆库batch (每N个新batch后训练1次)
         if mem_iter:
             try:
                 mem_data = next(mem_iter)
@@ -206,7 +217,7 @@ def create_memory_loader(memory_samples: list, batch_size: int):
 
 
 def train_month(model, month_train_loader, memory_loader, optimizer, criterion,
-                device, epochs: int = 5) -> tuple:
+                device, epochs: int = 5, memory_ratio: int = 1) -> tuple:
     """
     训练当月任务（增量训练模式，memory_loader 必定有内容）
 
@@ -218,6 +229,7 @@ def train_month(model, month_train_loader, memory_loader, optimizer, criterion,
         criterion: 损失函数
         device: 设备
         epochs: 训练轮数
+        memory_ratio: 每训练N个新batch，训练1个记忆库batch
 
     Returns:
         (last_loss, last_acc)
@@ -225,10 +237,10 @@ def train_month(model, month_train_loader, memory_loader, optimizer, criterion,
     last_loss, last_acc = 0.0, 0.0
 
     for epoch in range(1, epochs + 1):
-        # 1:1 交替训练
+        # 交替训练
         train_loss, train_acc = train_with_CL(
             model, month_train_loader, memory_loader,
-            optimizer, criterion, device
+            optimizer, criterion, device, memory_ratio
         )
 
         log.log(f"  Epoch {epoch:02d} | Loss: {train_loss:.4f} | Acc: {train_acc:.4f}")
@@ -264,6 +276,7 @@ def run_continual_learning_unk(
     batch_size: int = 128,
     memory_per_month: int = 10,
     use_memory: bool = True,
+    memory_ratio: int = 1,
     device: str = "cuda" if torch.cuda.is_available() else "cpu",
     seed: int = 42,
     pretrained_model_path: str = "./models/base_model.pt",
@@ -417,9 +430,9 @@ def run_continual_learning_unk(
 
         # 训练: 当月数据 + 记忆库
         if use_memory:
-            log.log(f"Training with memory replay...")
+            log.log(f"Training with memory replay (memory_ratio={memory_ratio})...")
             train_month(model, month_train_loader, memory_loader,
-                       optimizer, criterion, device, incremental_epochs)
+                       optimizer, criterion, device, incremental_epochs, memory_ratio)
         else:
             log.log(f"Training without memory replay...")
             train_month(model, month_train_loader, None,
@@ -483,7 +496,7 @@ if __name__ == "__main__":
 
     # ===== 加载配置文件 =====
     config_path = args.config
-    config = yaml.safe_load(open(config_path))
+    config = load_config(config_path)
 
     # 数据集路径
     base_path = config['dataset']['base_path']
@@ -502,6 +515,7 @@ if __name__ == "__main__":
     incremental_epochs = cl_config.get('incremental_epochs', 5)
     memory_per_month = cl_config.get('memory_per_month', 10)
     use_memory = cl_config.get('use_memory', True)
+    memory_ratio = cl_config.get('memory_ratio', 1)
 
     # 训练参数
     batch_size = config['training']['batch_size']
@@ -537,6 +551,7 @@ if __name__ == "__main__":
         batch_size=batch_size,
         memory_per_month=memory_per_month,
         use_memory=use_memory,
+        memory_ratio=memory_ratio,
         device=device,
         seed=seed,
         pretrained_model_path=pretrained_model_path,

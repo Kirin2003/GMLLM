@@ -10,6 +10,7 @@ from pathlib import Path
 from ast_parser import parse_file
 import json
 import yaml
+from utils.config_utils import load_config
 from graph_builder import ProjectGraphBuilder
 from llm_detector import LLMBehaviorDetector
 from exporter import save_call_graph
@@ -136,8 +137,7 @@ def batch_extract_call_graphs(detector: LLMBehaviorDetector, base_path: Path | s
 if __name__ == "__main__":
     # 读取配置文件
     config_path = "./configs/default.yaml"
-    with open(config_path, encoding="utf-8") as f:
-        config = yaml.safe_load(f)
+    config = load_config(config_path)
 
     llm_config = config.get("llm", {})
     dataset_config = config.get("dataset", {})
