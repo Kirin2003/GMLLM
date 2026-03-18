@@ -162,3 +162,6 @@ langchain-0.0.106.tar.gz,2023-03,CLEAN,0,0,61,76,33c3f45d44be4befa7f679210b0bc6d
 tencentcloud-sdk-python-eb-3.0.859.tar.gz,2023-03,CLEAN,0,0,62,76,78665f746877c87ed123b6a94b4ba85782b9d8e4efa729b2dd48e1e14b403e87
 wizata-dsapi-0.0.33.tar.gz,2023-03,benign,CLEAN,0,0,62,76,7e76ea86cc3589f474d89fd41fae623e75d27c64506d3b719ba6ee51665bade8
 backend.ai-accelerator-cuda-open-22.9.16.tar.gz,2023-03,benign,CLEAN,0,0,57,76,e3544c359a523af5cdecf41194755261bc897f4165ef6d8161747f735c9ab163
+types-aiobotocore-network-firewall-2.5.0.tar.gz,2023-03,benign,CLEAN,0,0,60,76,28bf1e1017170308072d6abc8182d96a6381d1f1290072a25c1cab1e8010df16
+tencentcloud-sdk-python-iotvideoindustry-3.0.859.tar.gz,2023-03,benign,CLEAN,0,0,62,76,0a48e836c06723559d3777bb009a005f697a60ca7acc75ba193d570593b30c59
+aws-cdk.aws-s3outposts-1.197.0.tar.gz,2023-03,benign,CLEAN,0,0,61,76,a44cb7ec8716268b4fdf4294d5cf64b40efdeee631ac1f1357474de39f82ed08

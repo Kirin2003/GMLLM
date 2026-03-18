@@ -8,7 +8,7 @@ from datetime import datetime
 
 
 # 默认日志目录
-LOG_DIR = "/Data2/hxq/GMLLM/logs"
+LOG_DIR = Path("/Data2/hxq/GMLLM/log")
 
 
 class Logger:
