@@ -12,6 +12,17 @@ import os
 import time
 import vt
 
+from pathlib import Path
+import sys
+
+# 添加项目根目录到 Python 路径
+project_root = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(project_root))
+from utils.logger_utils import Logger
+
+# 全局日志对象
+logger = Logger("virustotal.log")
+
 
 def compute_sha256(file_path: str) -> str:
     """Compute SHA256 hash of a file."""
@@ -47,7 +58,7 @@ def get_result(analysis_id: str, api_key: str, timeout: int = 60) -> dict:
 
         # Check if analysis is complete
         while analysis.status != "completed":
-            print(f"  Analysis status: {analysis.status}, waiting...")
+            logger.log(f"  Analysis status: {analysis.status}, waiting...")
             time.sleep(10)
             analysis = client.get_object(f"/analyses/{analysis_id}")
 
@@ -91,7 +102,7 @@ def submit_scan_main():
             reader = csv.DictReader(f)
             for row in reader:
                 submitted.append(row["package"])
-        print(f"Resuming: {len(submitted)} packages already submitted")
+        logger.log(f"Resuming: {len(submitted)} packages already submitted")
 
     # Collect packages
     packages = []
@@ -102,7 +113,7 @@ def submit_scan_main():
                 if pkg.endswith(".tar.gz"):
                     packages.append((f"{month_dir}/{pkg}", month, label))
 
-    print(f"Found {len(packages)} packages to submit")
+    logger.log(f"Found {len(packages)} packages to submit")
 
     # Open CSV for appending
     with open(scan_csv, "a", newline="") as f:
@@ -116,7 +127,7 @@ def submit_scan_main():
             if pkg_name in submitted:
                 continue
 
-            print(f"[{i + 1}/{len(packages)}] Submitting {pkg_name} ({month}, {label})...")
+            logger.log(f"[{i + 1}/{len(packages)}] Submitting {pkg_name} ({month}, {label})...")
 
             try:
                 result = submit_scan(pkg_path, api_key)
@@ -131,10 +142,13 @@ def submit_scan_main():
                 })
                 f.flush()
 
-                print(f"  -> analysis_id: {result['analysis_id']}")
+                logger.log(f"  -> analysis_id: {result['analysis_id']}")
 
             except Exception as e:
-                print(f"  -> Error: {e}")
+                logger.log(f"  -> Error: {e}")
+                if "QuotaExceededError" in str(type(e).__name__) or "quota" in str(e).lower():
+                    logger.log("Quota exceeded, exiting...")
+                    return
 
             # Rate limit: 4 requests per minute = 15 seconds between requests
             time.sleep(15.5)
@@ -152,7 +166,7 @@ def get_results_main():
         reader = csv.DictReader(f)
         rows = list(reader)
 
-    print(f"Found {len(rows)} submitted scans")
+    logger.log(f"Found {len(rows)} submitted scans")
 
     # Init result CSV
     if not os.path.exists(result_csv):
@@ -170,7 +184,7 @@ def get_results_main():
             reader = csv.DictReader(f)
             for row in reader:
                 completed.append(row["package"])
-    print(f"Already completed: {len(completed)} packages")
+    logger.log(f"Already completed: {len(completed)} packages")
 
     # Query results
     with open(result_csv, "a", newline="") as f:
@@ -185,7 +199,7 @@ def get_results_main():
                 continue
 
             analysis_id = row["analysis_id"]
-            print(f"[{i + 1}/{len(rows)}] Getting result for {pkg_name} (analysis_id: {analysis_id})...")
+            logger.log(f"[{i + 1}/{len(rows)}] Getting result for {pkg_name} (analysis_id: {analysis_id})...")
 
             try:
                 stats = get_result(analysis_id, api_key)
@@ -206,17 +220,20 @@ def get_results_main():
                 })
                 f.flush()
 
-                print(f"  -> {verdict}: {stats['malicious']}/{total}")
+                logger.log(f"  -> {verdict}: {stats['malicious']}/{total}")
 
             except Exception as e:
-                print(f"  -> Error: {e}")
+                logger.log(f"  -> Error: {e}")
+                if "QuotaExceededError" in str(type(e).__name__) or "quota" in str(e).lower():
+                    logger.log("Quota exceeded, exiting...")
+                    return
 
             # Rate limit
             time.sleep(15.5)
 
 
 def main():
-    mode = "submit"  # "submit" or "results"
+    mode = "results"  # "submit" or "results"
 
     if mode == "submit":
         submit_scan_main()

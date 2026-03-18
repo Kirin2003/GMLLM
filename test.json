@@ -1,0 +1,146 @@
+{
+  "errors": [],
+  "generated_at": "2026-03-17T08:54:16Z",
+  "metrics": {
+    "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/benign/2022-01/autoimport-1.0.0/setup.py": {
+      "CONFIDENCE.HIGH": 0.0,
+      "CONFIDENCE.LOW": 0.0,
+      "CONFIDENCE.MEDIUM": 3.0,
+      "CONFIDENCE.UNDEFINED": 0.0,
+      "SEVERITY.HIGH": 2.0,
+      "SEVERITY.LOW": 0.0,
+      "SEVERITY.MEDIUM": 1.0,
+      "SEVERITY.UNDEFINED": 0.0,
+      "loc": 46,
+      "nosec": 0
+    },
+    "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/benign/2022-01/autoimport-1.0.0/src/autoimport/__init__.py": {
+      "CONFIDENCE.HIGH": 0.0,
+      "CONFIDENCE.LOW": 0.0,
+      "CONFIDENCE.MEDIUM": 0.0,
+      "CONFIDENCE.UNDEFINED": 0.0,
+      "SEVERITY.HIGH": 0.0,
+      "SEVERITY.LOW": 0.0,
+      "SEVERITY.MEDIUM": 0.0,
+      "SEVERITY.UNDEFINED": 0.0,
+      "loc": 8,
+      "nosec": 0
+    },
+    "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/benign/2022-01/autoimport-1.0.0/src/autoimport/entrypoints/__init__.py": {
+      "CONFIDENCE.HIGH": 0.0,
+      "CONFIDENCE.LOW": 0.0,
+      "CONFIDENCE.MEDIUM": 0.0,
+      "CONFIDENCE.UNDEFINED": 0.0,
+      "SEVERITY.HIGH": 0.0,
+      "SEVERITY.LOW": 0.0,
+      "SEVERITY.MEDIUM": 0.0,
+      "SEVERITY.UNDEFINED": 0.0,
+      "loc": 24,
+      "nosec": 0
+    },
+    "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/benign/2022-01/autoimport-1.0.0/src/autoimport/entrypoints/cli.py": {
+      "CONFIDENCE.HIGH": 0.0,
+      "CONFIDENCE.LOW": 0.0,
+      "CONFIDENCE.MEDIUM": 0.0,
+      "CONFIDENCE.UNDEFINED": 0.0,
+      "SEVERITY.HIGH": 0.0,
+      "SEVERITY.LOW": 0.0,
+      "SEVERITY.MEDIUM": 0.0,
+      "SEVERITY.UNDEFINED": 0.0,
+      "loc": 59,
+      "nosec": 0
+    },
+    "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/benign/2022-01/autoimport-1.0.0/src/autoimport/model.py": {
+      "CONFIDENCE.HIGH": 0.0,
+      "CONFIDENCE.LOW": 0.0,
+      "CONFIDENCE.MEDIUM": 0.0,
+      "CONFIDENCE.UNDEFINED": 0.0,
+      "SEVERITY.HIGH": 0.0,
+      "SEVERITY.LOW": 0.0,
+      "SEVERITY.MEDIUM": 0.0,
+      "SEVERITY.UNDEFINED": 0.0,
+      "loc": 378,
+      "nosec": 0
+    },
+    "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/benign/2022-01/autoimport-1.0.0/src/autoimport/services.py": {
+      "CONFIDENCE.HIGH": 0.0,
+      "CONFIDENCE.LOW": 0.0,
+      "CONFIDENCE.MEDIUM": 0.0,
+      "CONFIDENCE.UNDEFINED": 0.0,
+      "SEVERITY.HIGH": 0.0,
+      "SEVERITY.LOW": 0.0,
+      "SEVERITY.MEDIUM": 0.0,
+      "SEVERITY.UNDEFINED": 0.0,
+      "loc": 46,
+      "nosec": 0
+    },
+    "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/benign/2022-01/autoimport-1.0.0/src/autoimport/version.py": {
+      "CONFIDENCE.HIGH": 0.0,
+      "CONFIDENCE.LOW": 0.0,
+      "CONFIDENCE.MEDIUM": 0.0,
+      "CONFIDENCE.UNDEFINED": 0.0,
+      "SEVERITY.HIGH": 0.0,
+      "SEVERITY.LOW": 0.0,
+      "SEVERITY.MEDIUM": 0.0,
+      "SEVERITY.UNDEFINED": 0.0,
+      "loc": 12,
+      "nosec": 0
+    },
+    "_totals": {
+      "CONFIDENCE.HIGH": 0.0,
+      "CONFIDENCE.LOW": 0.0,
+      "CONFIDENCE.MEDIUM": 3.0,
+      "CONFIDENCE.UNDEFINED": 0.0,
+      "SEVERITY.HIGH": 2.0,
+      "SEVERITY.LOW": 0.0,
+      "SEVERITY.MEDIUM": 1.0,
+      "SEVERITY.UNDEFINED": 0.0,
+      "loc": 573,
+      "nosec": 0
+    }
+  },
+  "results": [
+    {
+      "code": "11 with open(\"src/autoimport/version.py\") as fp:\n12     version_match = re.search(r'__version__ = \"(?P<version>.*)\"', fp.read())\n13     if version_match is None:\n",
+      "filename": "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/benign/2022-01/autoimport-1.0.0/setup.py",
+      "issue_confidence": "MEDIUM",
+      "issue_severity": "HIGH",
+      "issue_text": "os.read",
+      "line_number": 12,
+      "line_range": [
+        12
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/latest/plugins/b814_read.html",
+      "test_id": "B814",
+      "test_name": "read"
+    },
+    {
+      "code": "17 with open(\"README.md\", \"r\") as readme_file:\n18     readme = readme_file.read()\n19 \n",
+      "filename": "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/benign/2022-01/autoimport-1.0.0/setup.py",
+      "issue_confidence": "MEDIUM",
+      "issue_severity": "HIGH",
+      "issue_text": "os.read",
+      "line_number": 18,
+      "line_range": [
+        18
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/latest/plugins/b814_read.html",
+      "test_id": "B814",
+      "test_name": "read"
+    },
+    {
+      "code": "29     long_description_content_type=\"text/markdown\",\n30     url=\"https://github.com/lyz-code/autoimport\",\n31     packages=find_packages(\"src\"),\n",
+      "filename": "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/benign/2022-01/autoimport-1.0.0/setup.py",
+      "issue_confidence": "MEDIUM",
+      "issue_severity": "MEDIUM",
+      "issue_text": "url_found",
+      "line_number": 30,
+      "line_range": [
+        30
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/latest/plugins/b824_url_found.html",
+      "test_id": "B824",
+      "test_name": "url_found"
+    }
+  ]
+}

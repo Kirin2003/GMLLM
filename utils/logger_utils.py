@@ -7,8 +7,8 @@ from pathlib import Path
 from datetime import datetime
 
 
-# 默认日志目录（基于项目根目录）
-LOG_DIR = Path(__file__).resolve().parent.parent / "log"
+# 默认日志目录
+LOG_DIR = Path("/Data2/hxq/GMLLM/log")
 
 
 class Logger:
