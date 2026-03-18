@@ -66,11 +66,10 @@ def submit_scan_main():
     """Submit all packages for scanning."""
     base_dir = "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset_compressed"
     api_key = os.environ.get("VIRUSTOTAL_API_KEY")
-    scan_csv = "/Data2/hxq/GMLLM/results/virustotal_scan.csv"
+    scan_csv = "/Data2/hxq/GMLLM/results/virustotal_scan_lion.csv"
 
     # Labels and their directories
     label_dirs = [
-        ("benign", f"{base_dir}/benign"),
         ("malicious", f"{base_dir}/malicious"),
     ]
 
@@ -144,8 +143,8 @@ def submit_scan_main():
 def get_results_main():
     """Query results for submitted scans."""
     api_key = os.environ.get("VIRUSTOTAL_API_KEY")
-    scan_csv = "/Data2/hxq/GMLLM/results/virustotal_scan.csv"
-    result_csv = "/Data2/hxq/GMLLM/results/virustotal.csv"
+    scan_csv = "/Data2/hxq/GMLLM/results/virustotal_scan_lion.csv"
+    result_csv = "/Data2/hxq/GMLLM/results/virustotal_lion.csv"
 
     # Read submitted scans
     rows = []
