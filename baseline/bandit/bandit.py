@@ -82,8 +82,8 @@ def batch_scan(base_dir: str, start_month: str, end_month: str, timeout: int = N
         end_month: End month in format "YYYY-MM" (inclusive), e.g. "2024-12"
         timeout: Bandit timeout in seconds (None = no timeout)
 
-    Output: bandit.json saved in each package directory.
-    Supports resume: skips packages that already have bandit.json.
+    Output: bandit4mal.json saved in each package directory.
+    Supports resume: skips packages that already have bandit4mal.json.
     """
     from utils.month_utils import generate_month_range
 
@@ -100,13 +100,13 @@ def batch_scan(base_dir: str, start_month: str, end_month: str, timeout: int = N
                     targets.append((label, pkg_dir))
 
     # Filter: skip already processed
-    targets = [t for t in targets if not (t[1] / "bandit.json").exists()]
+    targets = [t for t in targets if not (t[1] / "bandit4mal.json").exists()]
 
     logger.log(f"Found {len(targets)} packages to scan")
 
     for label, pkg_dir in targets:
         pkg_name = pkg_dir.name
-        output_path = pkg_dir / "bandit.json"
+        output_path = pkg_dir / "bandit4mal.json"
         _, category = scan_directory(pkg_dir, output_path, timeout)
         logger.log(f"[{label}/{pkg_name}] {category}")
 
