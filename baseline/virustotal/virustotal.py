@@ -82,7 +82,7 @@ def submit_scan_main():
     # Labels and their directories
     label_dirs = [
         ("benign", f"{base_dir}/benign"),
-        #("malicious", f"{base_dir}/malicious"),
+        #("malicious", f"{base_dir}/malicious"), #TODO: 暂时只提交 benign 包，后续再提交 malicious 包
     ]
 
     months = [f"2023-{m:02d}" for m in range(3, 13)] + [f"2024-{m:02d}" for m in range(1, 13)]
