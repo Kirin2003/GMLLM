@@ -1,0 +1,272 @@
+import sys
+from pathlib import Path
+
+# 将上级目录加入 Python 搜索路径
+sys.path.insert(0, '/Data2/hxq/GMLLM')
+
+import os
+import json
+import torch
+import torch.nn as nn
+from pathlib import Path
+import argparse
+import yaml
+from utils.config_utils import load_config
+from torch_geometric.data import Dataset
+from torch_geometric.loader import DataLoader
+from torch.utils.data import ConcatDataset
+import random
+from utils.month_utils import generate_month_range
+from utils.data_utils import split_train_val_test, split_train_test
+from utils.data_loader import load_vocabs, load_month_dataset, build_dataloaders
+import copy
+
+# 从 distinguish_GNN_2 导入模型定义
+from distinguish_GNN_2 import GCNWithBehavior, validate
+from utils.logger_utils import Logger
+log = Logger("test_seen_months.log")
+
+def run_continual_learning_unk(
+    vocab_dir: str,
+    data_paths: dict,
+    base_train_months: tuple = ('2022-01', '2023-02'),
+    incremental_months: tuple = ('2023-03', '2024-12'),
+    incremental_epochs: int = 5,
+    batch_size: int = 128,
+    memory_per_month: int = 10,
+    use_memory: bool = True,
+    device: str = "cuda" if torch.cuda.is_available() else "cpu",
+    seed: int = 42,
+    pretrained_model_path: str = "./models/base_model.pt",
+    result_file: str = "continual_learning_unk_test_than_train_future_month.json",
+    model_save_path: str = "./models/incremental_unk_model_"
+):
+    output_dir = "../results/"
+    future_results_file = output_dir + result_file
+    print(f"Results will be saved to: {future_results_file}")
+    """
+    方案1: UNK映射（对照组）
+    - 使用固定词汇表（基础训练月份构建的词汇表）
+    - 新API自动映射到UNK
+    - 记录每月发现的新API数量
+
+    Returns:
+        model, seen_months_results, future_month_results
+    """
+    from distinguish_GNN_2 import set_seed
+    set_seed(seed)
+
+    log.log("="*60)
+    log.log("Running Feature Incremental Learning - Method 1: UNK Mapping (Baseline)")
+    log.log("="*60)
+
+    # 1. 加载词汇表（使用固定的词汇表，作为base vocab）
+    name2idx, type2idx, behavior2idx, edge_type2idx = load_vocabs(vocab_dir)
+    vocab = {'name2idx': name2idx, 'type2idx': type2idx,
+             'behavior2idx': behavior2idx, 'edge_type2idx': edge_type2idx}
+
+    base_vocab_size = len(name2idx)
+    log.log(f"Base vocabulary size: {base_vocab_size}")
+
+
+    # 2. 初始化模型
+    device = torch.device(device)
+    model = GCNWithBehavior(
+        name_vocab_size=len(vocab['name2idx']),
+        type_vocab_size=len(vocab['type2idx']),
+        behavior_dim=len(vocab['behavior2idx'])
+    ).to(device)
+
+    # 加载预训练模型
+    if os.path.exists(pretrained_model_path):
+        log.log(f"Loading pretrained model from {pretrained_model_path}")
+        model.load_state_dict(torch.load(pretrained_model_path, map_location=device))
+        log.log("Pretrained model loaded successfully")
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.005, weight_decay=1e-3)
+    criterion = nn.CrossEntropyLoss()
+
+    # 3. 加载数据
+    train_datasets = {}
+    test_datasets = {}
+    unseen_test_datasets = {}  # 用于记录增量月份的完整测试集（不划分）
+
+    # 加载基础训练月份数据（使用8:1:1划分）
+    base_start, base_end = base_train_months
+    for month in generate_month_range(base_start, base_end):
+        normal_ds, malicious_ds = load_month_dataset(month, vocab, data_paths)
+        log.log(f"  {month}: {len(normal_ds)} normal, {len(malicious_ds)} malicious")
+
+        (normal_train, normal_val, normal_test,
+         malicious_train, malicious_val, malicious_test) = split_train_val_test(normal_ds, malicious_ds)
+
+        train_datasets[month] = (normal_train, malicious_train)
+        test_datasets[month] = (normal_test, malicious_test)
+
+    # 加载增量月份数据（使用8:2划分）
+    inc_start, inc_end = incremental_months
+    for month in generate_month_range(inc_start, inc_end):
+        normal_ds, malicious_ds = load_month_dataset(month, vocab, data_paths)
+        log.log(f"  {month}: {len(normal_ds)} normal, {len(malicious_ds)} malicious")
+
+        unseen_test_datasets[month] = (copy.deepcopy(normal_ds), copy.deepcopy(malicious_ds))
+        # # 划分数据集 8:2
+        (normal_train, normal_test,
+         malicious_train, malicious_test) = split_train_test(normal_ds, malicious_ds)
+
+        train_datasets[month] = (normal_train, malicious_train)
+        test_datasets[month] = (normal_test, malicious_test)
+
+    
+
+    future_month_result = {'month': [], 'f1': [], 'acc': [], 'precision': [], 'recall': []}
+    seen_months_results = {'month': [], 'f1': [], 'acc': [], 'precision': [], 'recall': []}
+
+    # 5. 增量学习
+    log.log("\n" + "="*60)
+    log.log("Phase 3: Incremental Learning with UNK Mapping")
+    log.log("="*60)
+
+    for month in generate_month_range(inc_start, inc_end):
+        log.log(f"\n--- Month: {month} ---")
+
+        # ========== 评估阶段：先评估再训练 ==========
+
+        # 评估: 当月数据（用之前的模型评估）
+        if month in unseen_test_datasets:
+            current_month_loader = build_dataloaders({month: unseen_test_datasets[month]}, batch_size, shuffle=False)
+            current_loader = current_month_loader[month]
+            log.log(f"Evaluating on current month {month} (before training), {len(current_loader.dataset)} samples...")
+            metrics = validate(model, current_loader, device)
+            f1, acc, recall, precision = metrics
+            log.log(f"  {month}: F1={f1:.4f}, Precision={precision:.4f}, Recall={recall:.4f}")
+
+            future_month_result['month'].append(month)
+            future_month_result['f1'].append(f1)
+            future_month_result['acc'].append(acc)
+            future_month_result['precision'].append(precision)
+            future_month_result['recall'].append(recall)
+
+        # ========== 训练阶段 ==========
+
+        # 从已划分的数据集中获取当月训练数据
+        normal_train, malicious_train = train_datasets[month]
+        month_train_dataset = ConcatDataset([normal_train, malicious_train])
+        month_train_loader = DataLoader(
+            month_train_dataset, batch_size=batch_size, shuffle=True, num_workers=4
+        )
+
+        
+        # 加载当月模型
+        model_path = f"{model_save_path}{month}.pt"
+        model.load_state_dict(torch.load(model_path, map_location=device))
+        log.log(f"Model loaded from {model_path}")
+
+        # 评估已见月份（累积测试集：当月及之前所有月份）
+        cumulative_test_normal = []
+        cumulative_test_malicious = []
+        for past_month in generate_month_range(inc_start, month):
+            if past_month in test_datasets:
+                n, m = test_datasets[past_month]
+                cumulative_test_normal.extend(n)
+                cumulative_test_malicious.extend(m)
+
+        if cumulative_test_normal and cumulative_test_malicious:
+            cumulative_test_dataset = ConcatDataset([cumulative_test_normal, cumulative_test_malicious])
+            cumulative_test_loader = DataLoader(cumulative_test_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
+            log.log(f"Evaluating on seen months (cumulative test set, {len(cumulative_test_dataset)} samples)...")
+            metrics = validate(model, cumulative_test_loader, device)
+            f1, acc, recall, precision = metrics
+            log.log(f"  Seen months cumulative: {month}: F1={f1:.4f}, Precision={precision:.4f}, Recall={recall:.4f}")
+
+            seen_months_results['month'].append(month)
+            seen_months_results['f1'].append(f1)
+            seen_months_results['acc'].append(acc)
+            seen_months_results['precision'].append(precision)
+            seen_months_results['recall'].append(recall)
+
+
+
+    # 保存新API统计
+    output_dir = "../results/"
+    os.makedirs(output_dir, exist_ok=True)
+
+
+    # 保存已见月份结果
+    seen_results_file = output_dir + result_file.replace('future_month', 'seen_month')
+    with open(seen_results_file, 'w') as f:
+        json.dump(seen_months_results, f, indent=2)
+    log.log(f"Seen months results saved to {seen_results_file}")
+
+    return model, seen_months_results, future_month_result
+
+if __name__ == "__main__":
+    import argparse
+
+    # ===== 解析命令行参数 =====
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', type=str, default='./configs/default.yaml', help='配置文件路径')
+    args = parser.parse_args()
+
+    # ===== 加载配置文件 =====
+    config_path = args.config
+    config = load_config(config_path)
+
+    # 数据集路径
+    base_path = config['dataset']['base_path']
+    vocab_dir = str(Path(base_path) / config['dataset']['vocab_dir'])
+    data_paths = {
+        'benign_root': str(Path(base_path) / config['dataset']['benign_root']),
+        'malicious_root': str(Path(base_path) / config['dataset']['malicious_root']),
+        'benign_out': str(Path(base_path) / config['dataset']['benign_out']),
+        'malicious_out': str(Path(base_path) / config['dataset']['malicious_out']),
+    }
+
+    # 增量学习配置
+    cl_config = config.get('continual_learning', {})
+    base_train_months = tuple(cl_config.get('base_train_months', ['2022-01', '2023-02']))
+    incremental_months = tuple(cl_config.get('incremental_months', ['2023-03', '2024-12']))
+    incremental_epochs = cl_config.get('incremental_epochs', 5)
+    memory_per_month = cl_config.get('memory_per_month', 10)
+    use_memory = cl_config.get('use_memory', True)
+
+    # 训练参数
+    batch_size = config['training']['batch_size']
+    seed = config['training']['seed']
+
+    # 设备配置
+    device_config = config.get('device', 'auto')
+    if device_config == 'auto':
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    else:
+        device = device_config
+
+    # 路径配置
+    paths_config = config.get('paths', {})
+    pretrained_model_path = paths_config.get('pretrained_model', './models/base_model.pt')
+
+    # 结果文件配置 (支持多种配置方式)
+    results_config = config.get('results', {})
+    result_file = results_config.get('future_month')        
+
+    # 模型保存路径配置 (组合 models_dir 和 prefix)
+    models_dir = paths_config.get('models_dir', './models')
+    model_prefix = paths_config.get('prefix')
+    model_save_path = f"{models_dir}/{model_prefix}"
+
+    # 运行增量学习
+    run_continual_learning_unk(
+        vocab_dir=vocab_dir,
+        data_paths=data_paths,
+        base_train_months=base_train_months,
+        incremental_months=incremental_months,
+        incremental_epochs=incremental_epochs,
+        batch_size=batch_size,
+        memory_per_month=memory_per_month,
+        use_memory=use_memory,
+        device=device,
+        seed=seed,
+        pretrained_model_path=pretrained_model_path,
+        result_file=result_file,
+        model_save_path=model_save_path
+    )

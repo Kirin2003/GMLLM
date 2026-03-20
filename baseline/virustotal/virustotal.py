@@ -177,13 +177,13 @@ def get_results_main():
             )
             writer.writeheader()
 
-    # Load completed packages - use (package, month, label) as unique key
+    # Load completed packages - use (package, month) as unique key
     completed = []
     if os.path.exists(result_csv):
         with open(result_csv, "r") as f:
             reader = csv.DictReader(f)
             for row in reader:
-                completed.append((row["package"], row["month"], row["label"]))
+                completed.append((row["package"], row["month"]))
     logger.log(f"Already completed: {len(completed)} packages")
 
     # Query results
@@ -196,8 +196,7 @@ def get_results_main():
         for i, row in enumerate(rows):
             pkg_name = row["package"]
             month = row["month"]
-            label = row["label"]
-            if (pkg_name, month, label) in completed:
+            if (pkg_name, month) in completed:
                 continue
 
             analysis_id = row["analysis_id"]
@@ -235,7 +234,7 @@ def get_results_main():
 
 
 def main():
-    mode = "submit"  # "submit" or "results"
+    mode = "results"  # "submit" or "results"
 
     if mode == "submit":
         submit_scan_main()
