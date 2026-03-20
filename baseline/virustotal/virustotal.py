@@ -84,7 +84,7 @@ def submit_scan_main():
         ("malicious", f"{base_dir}/malicious"),
     ]
 
-    months = [f"2023-{m:02d}" for m in range(3, 13)] + [f"2024-{m:02d}" for m in range(1, 13)]
+    months = [f"2023-{m:02d}" for m in range(3, 13)] + [f"2024-{m:02d}" for m in range(1, 4)]
 
     # Init CSV
     if not os.path.exists(scan_csv):
@@ -233,7 +233,7 @@ def get_results_main():
 
 
 def main():
-    mode = "results"  # "submit" or "results"
+    mode = "submit"  # "submit" or "results"
 
     if mode == "submit":
         submit_scan_main()
