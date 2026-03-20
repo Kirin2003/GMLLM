@@ -4,32 +4,32 @@
 - 记忆库: 每月抽取最多10个样本，保持正负样本1:1
 """
 
+import sys
+from pathlib import Path
+
+# 将上级目录加入 Python 搜索路径
+sys.path.insert(0, '/Data2/hxq/GMLLM')
+
 import os
 import json
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from pathlib import Path
 import argparse
 import yaml
-from torch_geometric.data import Data, Dataset
+from utils.config_utils import load_config
+from torch_geometric.data import Dataset
 from torch_geometric.loader import DataLoader
-from torch_geometric.nn import GCNConv, global_mean_pool
-from generate_graph_data_fromJson import CallGraphDatasetFull_Lazy
-from torch.utils.data import ConcatDataset, Subset
-from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
+from torch.utils.data import ConcatDataset
 import random
-import numpy as np
-import time
-from ..utils.month_utils import generate_month_range
-from plot_results import plot_monthly_metrics, plot_monthly_incremental_results
-from ..utils.data_utils import split_train_val_test, split_train_test
-from ..utils.data_loader import load_vocabs, load_month_dataset, build_dataloaders, load_dict
+from utils.month_utils import generate_month_range
+from utils.data_utils import split_train_val_test, split_train_test
+from utils.data_loader import load_vocabs, load_month_dataset, build_dataloaders
 import copy
 
 # 从 distinguish_GNN_2 导入模型定义
-from distinguish_GNN_2 import GCNWithBehavior, set_seed, validate
-from ..utils.logger_utils import Logger
+from distinguish_GNN_2 import GCNWithBehavior, validate
+from utils.logger_utils import Logger
 log = Logger("continual_learning.log")
 
 
@@ -150,54 +150,6 @@ def train_with_CL(model, new_task_loader, memory_loader, optimizer, criterion, d
 
     return total_loss / total, correct / total
 
-
-# ============================================================================
-# 辅助函数
-# ============================================================================
-
-def discover_new_apis_in_month(month: str, data_paths: dict, base_vocab: dict) -> tuple:
-    """
-    发现当月数据中的新API（方案1：UNK映射需要）
-
-    Returns:
-        (new_names, new_types): 新发现的API名称和类型集合
-    """
-    new_names = set()
-    new_types = set()
-
-    # 检查良性包和恶意包
-    for root_key in ['benign_root', 'malicious_root']:
-        root_dir = Path(data_paths[root_key])
-        month_dir = root_dir / month
-
-        if not month_dir.exists():
-            continue
-
-        for folder in month_dir.iterdir():
-            if not folder.is_dir():
-                continue
-            graph_file = folder / 'call_graph.json'
-            if not graph_file.exists():
-                continue
-
-            try:
-                with open(graph_file, 'r', encoding='utf-8', errors='ignore') as f:
-                    graph = json.load(f)
-
-                for node in graph.get('nodes', []):
-                    name = node.get('qualified_name') or node.get('name', 'unknown_name')
-                    node_type = node.get('type', 'unknown_type')
-
-                    if name not in base_vocab['name2idx']:
-                        new_names.add(name)
-                    if node_type not in base_vocab['type2idx']:
-                        new_types.add(node_type)
-            except Exception:
-                continue
-
-    return new_names, new_types
-
-
 def create_memory_loader(memory_samples: list, batch_size: int):
     """创建记忆库数据加载器"""
     if len(memory_samples) > 0:
@@ -271,6 +223,9 @@ def run_continual_learning_unk(
     result_file: str = "continual_learning_unk_test_than_train_future_month.json",
     model_save_path: str = "./models/incremental_unk_model_"
 ):
+    output_dir = "../results/"
+    future_results_file = output_dir + result_file
+    print(f"Results will be saved to: {future_results_file}")
     """
     方案1: UNK映射（对照组）
     - 使用固定词汇表（基础训练月份构建的词汇表）
@@ -278,7 +233,7 @@ def run_continual_learning_unk(
     - 记录每月发现的新API数量
 
     Returns:
-        model, seen_months_results, future_month_results, new_apis_stats
+        model, seen_months_results, future_month_results
     """
     from distinguish_GNN_2 import set_seed
     set_seed(seed)
@@ -295,8 +250,6 @@ def run_continual_learning_unk(
     base_vocab_size = len(name2idx)
     log.log(f"Base vocabulary size: {base_vocab_size}")
 
-    # 保存base vocab用于检测新API
-    base_vocab = {k: v.copy() for k, v in vocab.items()}
 
     # 2. 初始化模型
     device = torch.device(device)
@@ -318,9 +271,7 @@ def run_continual_learning_unk(
     # 3. 加载数据
     train_datasets = {}
     test_datasets = {}
-
-    # 记录新发现的API
-    new_apis_stats = []
+    unseen_test_datasets = {}  # 用于记录增量月份的完整测试集（不划分）
 
     # 加载基础训练月份数据（使用8:1:1划分）
     base_start, base_end = base_train_months
@@ -340,27 +291,13 @@ def run_continual_learning_unk(
         normal_ds, malicious_ds = load_month_dataset(month, vocab, data_paths)
         log.log(f"  {month}: {len(normal_ds)} normal, {len(malicious_ds)} malicious")
 
+        unseen_test_datasets[month] = (copy.deepcopy(normal_ds), copy.deepcopy(malicious_ds))
         # # 划分数据集 8:2
-        # (normal_train, normal_test,
-        #  malicious_train, malicious_test) = split_train_test(normal_ds, malicious_ds)
-
-        # 所有的数据集均用作测试集和训练集，先测试再训练
-        normal_test, malicious_test = normal_ds, malicious_ds
-        normal_train, malicious_train = copy.deepcopy(normal_ds), copy.deepcopy(malicious_ds)
+        (normal_train, normal_test,
+         malicious_train, malicious_test) = split_train_test(normal_ds, malicious_ds)
 
         train_datasets[month] = (normal_train, malicious_train)
         test_datasets[month] = (normal_test, malicious_test)
-
-        # 发现当月的新API（仅统计，不改变词汇表）
-        # new_names, new_types = discover_new_apis_in_month(month, data_paths, base_vocab)
-        # if new_names or new_types:
-        #     log.log(f"    -> Discovered {len(new_names)} new APIs, {len(new_types)} new types (mapped to UNK)")
-        #     new_apis_stats.append({
-        #         'month': month,
-        #         'new_api_names': len(new_names),
-        #         'new_api_types': len(new_types),
-        #         'total_new': len(new_names) + len(new_types)
-        #     })
 
     # 4. 构建基础月份记忆库
     memory_samples = []
@@ -377,31 +314,32 @@ def run_continual_learning_unk(
     future_month_result = {'month': [], 'f1': [], 'acc': [], 'precision': [], 'recall': []}
     seen_months_results = {'month': [], 'f1': [], 'acc': [], 'precision': [], 'recall': []}
 
-    # 评估：基础月份的下一个月，即2023-03（用基础模型评估）
-    first_future_month = "2023-03"
-
-    if first_future_month in test_datasets:
-        log.log(f"\n--- Evaluating base model on {first_future_month} (before incremental learning) ---")
-        first_future_loader = build_dataloaders({first_future_month: test_datasets[first_future_month]}, batch_size, shuffle=False)
-        first_loader = first_future_loader[first_future_month]
-        metrics = validate(model, first_loader, device)
-        f1, acc, recall, precision = metrics
-        log.log(f"  {first_future_month}: F1={f1:.4f}, Acc={acc:.4f}")
-
-        future_month_result['month'].append(first_future_month)
-        future_month_result['f1'].append(f1)
-        future_month_result['acc'].append(acc)
-        future_month_result['precision'].append(precision)
-        future_month_result['recall'].append(recall)
-
     # 5. 增量学习
     log.log("\n" + "="*60)
     log.log("Phase 3: Incremental Learning with UNK Mapping")
     log.log("="*60)
 
-
     for month in generate_month_range(inc_start, inc_end):
         log.log(f"\n--- Month: {month} ---")
+
+        # ========== 评估阶段：先评估再训练 ==========
+
+        # 评估: 当月数据（用之前的模型评估）
+        if month in unseen_test_datasets:
+            current_month_loader = build_dataloaders({month: unseen_test_datasets[month]}, batch_size, shuffle=False)
+            current_loader = current_month_loader[month]
+            log.log(f"Evaluating on current month {month} (before training), {len(current_loader.dataset)} samples...")
+            metrics = validate(model, current_loader, device)
+            f1, acc, recall, precision = metrics
+            log.log(f"  {month}: F1={f1:.4f}, Precision={precision:.4f}, Recall={recall:.4f}")
+
+            future_month_result['month'].append(month)
+            future_month_result['f1'].append(f1)
+            future_month_result['acc'].append(acc)
+            future_month_result['precision'].append(precision)
+            future_month_result['recall'].append(recall)
+
+        # ========== 训练阶段 ==========
 
         # 从已划分的数据集中获取当月训练数据
         normal_train, malicious_train = train_datasets[month]
@@ -415,7 +353,6 @@ def run_continual_learning_unk(
 
         # 训练: 当月数据 + 记忆库
         if use_memory:
-            log.log(f"Training with memory replay...")
             train_month(model, month_train_loader, memory_loader,
                        optimizer, criterion, device, incremental_epochs)
         else:
@@ -429,26 +366,30 @@ def run_continual_learning_unk(
         torch.save(model.state_dict(), model_path)
         log.log(f"Model saved to {model_path}")
 
-        # 评估: 当月后一个月
-        all_months_list = list(generate_month_range(inc_start, inc_end))
-        month_idx = all_months_list.index(month)
-        if month_idx + 1 < len(all_months_list):
-            next_month = all_months_list[month_idx + 1]
-            if next_month in test_datasets:
-                log.log(f"Evaluating on next month {next_month}...")
-                next_test_loader = build_dataloaders({next_month: test_datasets[next_month]}, batch_size, shuffle=False)
-                next_loader = next_test_loader[next_month]
-                metrics = validate(model, next_loader, device)
-                f1, acc, recall, precision = metrics
-                log.log(f"  {next_month}: F1={f1:.4f}, Acc={acc:.4f}")
+        # 评估已见月份（累积测试集：当月及之前所有月份）
+        cumulative_test_normal = []
+        cumulative_test_malicious = []
+        for past_month in generate_month_range(inc_start, month):
+            if past_month in test_datasets:
+                n, m = test_datasets[past_month]
+                cumulative_test_normal.extend(n)
+                cumulative_test_malicious.extend(m)
 
-                future_month_result['month'].append(next_month)
-                future_month_result['f1'].append(f1)
-                future_month_result['acc'].append(acc)
-                future_month_result['precision'].append(precision)
-                future_month_result['recall'].append(recall)
+        if cumulative_test_normal and cumulative_test_malicious:
+            cumulative_test_dataset = ConcatDataset([cumulative_test_normal, cumulative_test_malicious])
+            cumulative_test_loader = DataLoader(cumulative_test_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
+            log.log(f"Evaluating on seen months (cumulative test set, {len(cumulative_test_dataset)} samples)...")
+            metrics = validate(model, cumulative_test_loader, device)
+            f1, acc, recall, precision = metrics
+            log.log(f"  Seen months cumulative: {month}: F1={f1:.4f}, Precision={precision:.4f}, Recall={recall:.4f}")
 
-        # 更新记忆库
+            seen_months_results['month'].append(month)
+            seen_months_results['f1'].append(f1)
+            seen_months_results['acc'].append(acc)
+            seen_months_results['precision'].append(precision)
+            seen_months_results['recall'].append(recall)
+
+        # ========== 更新记忆库 ==========
         if use_memory:
             log.log(f"Updating memory bank...")
             month_datasets = {month: train_datasets[month]}
@@ -460,16 +401,17 @@ def run_continual_learning_unk(
     output_dir = "../results/"
     os.makedirs(output_dir, exist_ok=True)
 
-    new_apis_file = output_dir + "new_apis_statistics.json"
-    with open(new_apis_file, 'w') as f:
-        json.dump(new_apis_stats, f, indent=2)
-    log.log(f"\nNew APIs statistics saved to {new_apis_file}")
-
     future_results_file = output_dir + result_file
     with open(future_results_file, 'w') as f:
         json.dump(future_month_result, f, indent=2)
 
-    return model, seen_months_results, future_month_result, new_apis_stats
+    # 保存已见月份结果
+    seen_results_file = output_dir + result_file.replace('future_month', 'seen_month')
+    with open(seen_results_file, 'w') as f:
+        json.dump(seen_months_results, f, indent=2)
+    log.log(f"Seen months results saved to {seen_results_file}")
+
+    return model, seen_months_results, future_month_result
 
 if __name__ == "__main__":
     import argparse
@@ -481,7 +423,7 @@ if __name__ == "__main__":
 
     # ===== 加载配置文件 =====
     config_path = args.config
-    config = yaml.safe_load(open(config_path))
+    config = load_config(config_path)
 
     # 数据集路径
     base_path = config['dataset']['base_path']

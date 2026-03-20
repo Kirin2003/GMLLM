@@ -38,12 +38,12 @@ continual_learning:
   base_train_months: ['2022-01', '2023-02']
   incremental_months: ['2023-03', '2024-12']
   incremental_epochs: 5
-  memory_per_month: 20
-  use_memory: False
+  memory_per_month: 10
+  use_memory: True
 
 # 结果文件配置
 results:
-  future_month: "test_than_train_future_test_results.json"
+  future_month: "CL_unk_test_than_train_future_month.json"
 
 # 路径配置
 paths:

@@ -7,6 +7,12 @@
 2. 显示正确的结果是什么
 3. 统计UNK模型相比于baseline模型，恶意样本和良性样本的正确数提升了多少
 """
+import sys
+from pathlib import Path
+
+# 将上级目录加入 Python 搜索路径
+sys.path.insert(0, '/Data2/hxq/GMLLM')
+
 import json
 import torch
 import torch.nn.functional as F
@@ -19,9 +25,9 @@ import argparse
 from datetime import datetime
 
 from distinguish_GNN_2 import GCNWithBehavior, load_dict, set_seed
-from ..utils.data_loader import load_vocabs, load_month_dataset
-from ..utils.data_utils import split_train_test
-from ..utils.logger_utils import Logger as Log
+from utils.data_loader import load_vocabs, load_month_dataset
+from utils.data_utils import split_train_test
+from utils.logger_utils import Logger as Log
 
 # 全局日志对象
 log = None

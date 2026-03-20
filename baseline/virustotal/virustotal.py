@@ -95,13 +95,13 @@ def submit_scan_main():
             )
             writer.writeheader()
 
-    # Load already submitted packages
+    # Load already submitted packages - use (package, month, label) as unique key
     submitted = []
     if os.path.exists(scan_csv):
         with open(scan_csv, "r") as f:
             reader = csv.DictReader(f)
             for row in reader:
-                submitted.append(row["package"])
+                submitted.append((row["package"], row["month"], row["label"]))
         logger.log(f"Resuming: {len(submitted)} packages already submitted")
 
     # Collect packages
@@ -124,7 +124,7 @@ def submit_scan_main():
 
         for i, (pkg_path, month, label) in enumerate(packages):
             pkg_name = pkg_path.split("/")[-1]
-            if pkg_name in submitted:
+            if (pkg_name, month, label) in submitted:
                 continue
 
             logger.log(f"[{i + 1}/{len(packages)}] Submitting {pkg_name} ({month}, {label})...")
@@ -177,13 +177,13 @@ def get_results_main():
             )
             writer.writeheader()
 
-    # Load completed packages
+    # Load completed packages - use (package, month) as unique key
     completed = []
     if os.path.exists(result_csv):
         with open(result_csv, "r") as f:
             reader = csv.DictReader(f)
             for row in reader:
-                completed.append(row["package"])
+                completed.append((row["package"], row["month"]))
     logger.log(f"Already completed: {len(completed)} packages")
 
     # Query results
@@ -195,7 +195,8 @@ def get_results_main():
 
         for i, row in enumerate(rows):
             pkg_name = row["package"]
-            if pkg_name in completed:
+            month = row["month"]
+            if (pkg_name, month) in completed:
                 continue
 
             analysis_id = row["analysis_id"]

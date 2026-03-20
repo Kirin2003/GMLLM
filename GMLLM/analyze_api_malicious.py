@@ -3,15 +3,20 @@
 """
 使用 Qwen 批量分析新增外部API的恶意性，并生成合成规则更新 synth_rules.json
 """
+import sys
+from pathlib import Path
+
+# 将上级目录加入 Python 搜索路径
+sys.path.insert(0, '/Data2/hxq/GMLLM')
+
 import json
 import os
-import sys
 import time
 import re
 from pathlib import Path
 from openai import OpenAI
 from rules_fallback import BEHAVIOR_RULES
-from ..utils.logger_utils import Logger
+from utils.logger_utils import Logger
 
 # 获取所有恶意行为标签
 ALL_BEHAVIOR_TAGS = list(BEHAVIOR_RULES.keys())

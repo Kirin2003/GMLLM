@@ -1,26 +1,26 @@
+import sys
+from pathlib import Path
+
+# 将上级目录加入 Python 搜索路径
+sys.path.insert(0, '/Data2/hxq/GMLLM')
+
 import os
 import json
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from pathlib import Path
-import argparse
 import yaml
-from torch_geometric.data import Data
-from torch_geometric.loader import DataLoader
+from utils.config_utils import load_config
 from torch_geometric.nn import GCNConv, global_mean_pool
 from torch.utils.data import ConcatDataset
-from torch.utils.data import Subset
 from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
 import random
 import numpy as np
 import time
-from ..utils.month_utils import generate_month_range
-from plot_results import plot_monthly_metrics
-from ..utils.data_utils import split_train_val_test, split_train_test
-from ..utils.data_loader import load_vocabs, build_dataloaders, load_month_dataset
-import copy
-from ..utils.logger_utils import Logger
+from utils.month_utils import generate_month_range
+from utils.data_utils import split_train_val_test
+from utils.data_loader import load_vocabs, build_dataloaders, load_month_dataset
+from utils.logger_utils import Logger
 
 # 创建日志记录器
 log = Logger("train_base_model.log")
@@ -315,7 +315,7 @@ def run_base_model(
 if __name__ == "__main__":
     # 加载配置文件
     config_path = "./configs/default.yaml"
-    config = yaml.safe_load(open(config_path))
+    config = load_config(config_path)
 
     # 数据集路径
     base_path = config['dataset']['base_path']

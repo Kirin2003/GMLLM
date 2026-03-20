@@ -117,8 +117,49 @@ def analyze_batch(input_dir: str, skip_existing: bool = True):
     print(f"\n完成! 跳过: {skip_count}")
 
 
+def analyze_missing_packages(csv_path: str):
+    """
+    读取缺失包 CSV 文件，运行漏掉的包并保存结果
+
+    Args:
+        csv_path: missing_packages.csv 文件路径
+    """
+    import csv
+
+    csv_file = Path(csv_path)
+    if not csv_file.exists():
+        print(f"CSV 文件不存在: {csv_path}")
+        return
+
+    # 读取 CSV，跳过 header
+    packages = []
+    with open(csv_file, 'r') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            packages.append(row)
+
+    print(f"共找到 {len(packages)} 个缺失包")
+
+    for i, pkg in enumerate(packages, 1):
+        label = pkg['label']  # benign 或 malicious
+        month = pkg['month']
+        name = pkg['name']
+        path = pkg['path']  # 格式: malicious/2023-07/xxx.tar.gz
+
+        # 构建完整包路径
+        package_path = Path(HTTP_SERVER_DIR) / path
+        if not package_path.exists():
+            print(f"[{i}/{len(packages)}] 包不存在: {package_path}")
+            continue
+
+        print(f"[{i}/{len(packages)}] 分析: {label}/{month}/{name}")
+        analyze_package(str(package_path))
+
+    print(f"\n完成! 共处理 {len(packages)} 个包")
+
+
 def main():
-    analyze_batch(HTTP_SERVER_DIR)
+    analyze_missing_packages("/Data2/hxq/datasets/scripts/missing_packages.csv")
 
 
 if __name__ == "__main__":
