@@ -91,9 +91,9 @@ def parse_category(json_file: Path) -> str:
     try:
         data = json.load(open(json_file))
         totals = data.get("metrics", {}).get("_totals", {})
-        high_severity = totals.get("SEVERITY.HIGH", 0)
+        severity = totals.get("SEVERITY.HIGH", 0) + totals.get("SEVERITY.LOW", 0) + totals.get("SEVERITY.MEDIUM", 0) + totals.get("SEVERITY.UNDEFINED", 0)
 
-        if high_severity >= 3:
+        if severity >= 3:
             return "malicious"
         return "benign"
     except Exception:
@@ -206,7 +206,7 @@ def compute_metrics(csv_path: str = None):
 
     res_df = pd.DataFrame(results)
 
-    output_json = "../../results/bandit_future_month.json"
+    output_json = "../../results/bandit.json"
 
     json_data = {
         "month": res_df['month'].tolist(),
@@ -225,7 +225,7 @@ def compute_metrics(csv_path: str = None):
 
 
 if __name__ == "__main__":
-    # batch_parse(
-    #     base_dir="/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset", start_month="2023-03", end_month="2024-12"
-    # )
+    batch_parse(
+        base_dir="/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset", start_month="2023-03", end_month="2024-12"
+    )
     compute_metrics()

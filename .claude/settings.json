@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Data2/hxq/GMLLM/**)",
+      "Bash(sort -k2)",
+      "Bash(python3 -c \":*)",
+      "Bash(ls /Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/malicious/2024-*)"
+    ]
+  }
+}
