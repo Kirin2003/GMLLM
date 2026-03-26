@@ -6,14 +6,25 @@ from pathlib import Path
 from typing import Optional, Dict, Tuple, List
 
 from llm_client import get_llm_client, get_model_name
+import sys
+sys.path.insert(0, "/Data2/hxq/GMLLM")  # 添加项目根目录到 Python 路径
+
+from utils.logger_utils import Logger
+from utils.month_utils import generate_month_range
+
+logger = Logger("direct_call_llm_2.log")
 
 # 加载 LLM 配置
 config_path = Path(__file__).parent / "configs" / "llm_config.json"
 with open(config_path, 'r') as f:
     LLM_CONFIG = json.load(f)
 
-LLM_PROVIDER = LLM_CONFIG.get('provider', 'qwen')
+LLM_PROVIDER = LLM_CONFIG.get('provider', 'qwen3.5-27b')
 LLM_MODEL = get_model_name(LLM_PROVIDER, LLM_CONFIG)
+
+# 调试日志：确认使用的模型和 base_url
+logger.log(f"[DEBUG] LLM 配置: provider={LLM_PROVIDER}, model={LLM_MODEL}")
+logger.log(f"[DEBUG] base_url: {LLM_CONFIG.get(LLM_PROVIDER, {}).get('base_url', 'NOT FOUND')}")
 
 system_prompt_a = """You are a PyPI package security auditor.
 You have been provided with the code of a PyPI package script.
@@ -46,7 +57,7 @@ def get_all_py_files(package_path: Path) -> str:
             all_code.append(content)
             all_code.append("\n\n")
         except Exception as e:
-            print(f"读取文件失败 {py_file}: {e}")
+            logger.log(f"读取文件失败 {py_file}: {e}")
     return "".join(all_code)
 
 
@@ -60,17 +71,23 @@ def query_llm_for_verdict(source_code: str) -> Tuple[Optional[str], Optional[dic
     Returns:
         (LLM响应文本, token使用信息) 元组
     """
-    client = get_llm_client(LLM_PROVIDER, LLM_MODEL)
+    client = get_llm_client(LLM_PROVIDER, LLM_MODEL, LLM_CONFIG)
+
+    max_chars = 262144  # 根据模型上下文限制
 
     try:
         response = client.chat.completions.create(
             model=LLM_MODEL,
             messages=[
                 {"role": "system", "content": system_prompt_a},
-                {"role": "user", "content": source_code}
+                {"role": "user", "content": source_code[:max_chars]}
             ],
             temperature=0.1,
-            max_tokens=1024
+            max_tokens=1024,
+            # 【关键修改】通过 extra_body 传入 enable_thinking=False 关闭推理模式
+            extra_body={
+                "enable_thinking": False
+            }
         )
         content = response.choices[0].message.content.strip()
         usage = {
@@ -80,7 +97,11 @@ def query_llm_for_verdict(source_code: str) -> Tuple[Optional[str], Optional[dic
         }
         return content, usage
     except Exception as e:
-        print(f"LLM 调用失败: {e}")
+        error_msg = str(e)
+        logger.log(f"LLM 调用失败: {e}")
+        # 检测额度耗尽错误 (403 AllocationQuota.FreeTierOnly)，重新抛出让上层处理
+        if "403" in error_msg and ("Quota" in error_msg or "FreeTierOnly" in error_msg or "AllocationQuota" in error_msg):
+            raise
         return None, None
 
 
@@ -122,19 +143,19 @@ def analyze_package(package_path: str, output_path: Optional[str] = None) -> Dic
     package_path = Path(package_path)
     package_name = package_path.name
 
-    print(f"正在分析包: {package_name}")
+    logger.log(f"正在分析包: {package_name}")
 
     # 1. 读取所有 Python 源文件
     source_code = get_all_py_files(package_path)
     if not source_code:
-        print(f"警告: {package_name} 中没有找到 Python 文件")
+        logger.log(f"警告: {package_name} 中没有找到 Python 文件")
         result = {
             "package_name": package_name,
             "verdict": "Error",
             "reasoning": "No Python files found in the package"
         }
     else:
-        print(f"已读取源代码长度: {len(source_code)} 字符")
+        logger.log(f"已读取源代码长度: {len(source_code)} 字符")
 
         # 2. 调用 LLM 分析
         llm_response, token_usage = query_llm_for_verdict(source_code)
@@ -145,9 +166,9 @@ def analyze_package(package_path: str, output_path: Optional[str] = None) -> Dic
                 "reasoning": "Failed to get response from LLM"
             }
         else:
-            print(f"LLM 响应: {llm_response[:200]}...")
+            logger.log(f"LLM 响应: {llm_response[:200]}...")
             if token_usage:
-                print(f"Token 使用: prompt={token_usage['prompt_tokens']}, completion={token_usage['completion_tokens']}, total={token_usage['total_tokens']}")
+                logger.log(f"Token 使用: prompt={token_usage['prompt_tokens']}, completion={token_usage['completion_tokens']}, total={token_usage['total_tokens']}")
 
             # 3. 解析响应
             parsed = parse_llm_response(llm_response)
@@ -155,19 +176,21 @@ def analyze_package(package_path: str, output_path: Optional[str] = None) -> Dic
                 "package_name": package_name,
                 "verdict": parsed["verdict"],
                 "reasoning": parsed["reasoning"],
-                "token_usage": token_usage
+                "prompt_tokens": token_usage.get("prompt_tokens") if token_usage else None,
+                "completion_tokens": token_usage.get("completion_tokens") if token_usage else None,
+                "total_tokens": token_usage.get("total_tokens") if token_usage else None,
             }
 
     # 4. 输出结果
     if output_path:
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(result, f, indent=4, ensure_ascii=False)
-        print(f"结果已保存到: {output_path}")
+        logger.log(f"结果已保存到: {output_path}")
     else:
         output_path = f"{package_name}_analysis.json"
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(result, f, indent=4, ensure_ascii=False)
-        print(f"结果已保存到: {output_path}")
+        logger.log(f"结果已保存到: {output_path}")
 
     return result
 
@@ -194,53 +217,58 @@ def save_to_csv(results: List[Dict], csv_path: str):
             writer.writeheader()
 
         for r in results:
-            token_usage = r.get("token_usage") or {}
             row = {
                 "package_name": r.get("package_name", ""),
                 "verdict": r.get("verdict", ""),
                 "reasoning": r.get("reasoning", ""),
-                "prompt_tokens": token_usage.get("prompt_tokens", ""),
-                "completion_tokens": token_usage.get("completion_tokens", ""),
-                "total_tokens": token_usage.get("total_tokens", ""),
+                "prompt_tokens": r.get("prompt_tokens", ""),
+                "completion_tokens": r.get("completion_tokens", ""),
+                "total_tokens": r.get("total_tokens", ""),
                 "month": r.get("month", ""),
                 "type": r.get("package_type", "")
             }
             writer.writerow(row)
 
-    print(f"CSV 已保存到: {csv_path}")
+    logger.log(f"CSV 已保存到: {csv_path}")
 
 
-def batch_analyze_packages(dataset_base: str, output_csv: str):
+def batch_analyze_packages(dataset_base: str):
     """
     批量分析数据集下的所有包
 
     Args:
         dataset_base: 数据集根目录
-        output_csv: 输出 CSV 文件路径
     """
+    import time
+
     base_path = Path(dataset_base)
-    results = []
 
     # 统计信息
     total_packages = 0
     processed = 0
     skipped = 0
 
-    # 先统计总数
-    for package_type in ["malicious", "benign"]:
+    # 先统计总数（只统计 2023-03 到 2024-12 的月份）
+    # allowed_months = generate_month_range("2023-03", "2024-12")
+    allowed_months = generate_month_range("2023-03", "2023-03") # TODO 先只处理到 2023-03，后续再处理后续月份
+    # for package_type in ["malicious", "benign"]:
+    for package_type in ["malicious"]: # TODO 先只处理 malicious，后续再处理 benign
         type_dir = base_path / package_type
         if not type_dir.exists():
             continue
         for month_dir in type_dir.iterdir():
             if not month_dir.is_dir():
                 continue
+            if month_dir.name not in allowed_months:
+                continue
             packages = [p for p in month_dir.iterdir() if p.is_dir()]
             total_packages += len(packages)
 
-    print(f"总共需要处理 {total_packages} 个包")
+    logger.log(f"总共需要处理 {total_packages} 个包")
 
     # 遍历处理
-    for package_type in ["malicious", "benign"]:
+    # for package_type in ["malicious", "benign"]:
+    for package_type in ["malicious"]: # TODO 先只处理 malicious，后续再处理 benign
         type_dir = base_path / package_type
         if not type_dir.exists():
             continue
@@ -250,61 +278,58 @@ def batch_analyze_packages(dataset_base: str, output_csv: str):
                 continue
             month = month_dir.name
 
-            for package_dir in month_dir.iterdir():
+            # 只处理 2023-03 到 2024-12 的月份
+            # allowed_months = generate_month_range("2023-03", "2024-12")
+            allowed_months = generate_month_range("2023-03", "2023-03") # TODO 先只处理到 2023-03，后续再处理后续月份
+            if month not in allowed_months:
+                continue
+
+            for package_dir in sorted(month_dir.iterdir()):
                 if not package_dir.is_dir():
                     continue
 
                 package_name = package_dir.name
-                json_path = package_dir / "analysis.json"
+                json_path = package_dir / "qwen3_5_27b.json"
 
                 # 检查是否已处理
                 if json_path.exists():
-                    print(f"跳过已处理: {package_name} ({month}/{package_type})")
+                    logger.log(f"跳过已处理: {package_name} ({month}/{package_type})")
                     skipped += 1
-                    # 读取已有的结果用于 CSV
-                    try:
-                        with open(json_path, 'r', encoding='utf-8') as f:
-                            existing_result = json.load(f)
-                            existing_result["month"] = month
-                            existing_result["package_type"] = package_type
-                            results.append(existing_result)
-                    except:
-                        pass
                     continue
 
-                print(f"处理中: {package_name} ({month}/{package_type})")
+                logger.log(f"处理中: {package_name} ({month}/{package_type})")
                 processed += 1
 
                 try:
-                    # 分析包，结果保存到包目录下的 analysis.json
+                    # 分析包，结果保存到包目录下的 qwen3_5_27b.json
                     result = analyze_package(str(package_dir), str(json_path))
                     result["month"] = month
                     result["package_type"] = package_type
-                    results.append(result)
+
+                    # 重新保存包含 month 和 package_type 的结果
+                    with open(json_path, 'w', encoding='utf-8') as f:
+                        json.dump(result, f, indent=4, ensure_ascii=False)
+
+                    # 每成功分析一个包后休息10秒
+                    time.sleep(10)
+
                 except Exception as e:
-                    print(f"处理失败 {package_name}: {e}")
-                    results.append({
-                        "package_name": package_name,
-                        "verdict": "Error",
-                        "reasoning": str(e),
-                        "month": month,
-                        "package_type": package_type,
-                        "token_usage": {}
-                    })
+                    error_msg = str(e)
+                    # 检测额度耗尽错误 (403 AllocationQuota.FreeTierOnly)
+                    if "403" in error_msg and ("Quota" in error_msg or "FreeTierOnly" in error_msg or "AllocationQuota" in error_msg):
+                        logger.log(f"额度耗尽，停止批量分析: {error_msg}")
+                        logger.log(f"完成! 总计: {total_packages}, 已处理: {processed}, 跳过: {skipped}")
+                        return
 
-    # 保存 CSV
-    if results:
-        save_to_csv(results, output_csv)
+                    logger.log(f"处理失败 {package_name}: {error_msg}")
 
-    print(f"\n完成! 总计: {total_packages}, 已处理: {processed}, 跳过: {skipped}")
+    logger.log(f"完成! 总计: {total_packages}, 已处理: {processed}, 跳过: {skipped}")
 
 
 def main():
     """批量分析数据集"""
     dataset_base = "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset"
-    output_csv = "results/summary.csv"
-    Path(output_csv).parent.mkdir(parents=True, exist_ok=True)
-    batch_analyze_packages(dataset_base, output_csv)
+    batch_analyze_packages(dataset_base)
 
 
 if __name__ == "__main__":
