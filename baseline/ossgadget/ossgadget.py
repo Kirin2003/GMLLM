@@ -240,15 +240,15 @@ def parse_category(json_file: Path) -> str:
             return "error"
         results = runs[0].get("results", [])
 
-        # Count results with severity >= 4
+        # Count results
         rule_count = 0
         for result in results:
             severity = result.get("properties", {}).get("Severity", 0)
             confidence = result.get("properties", {}).get("Confidence", 0)
-            if severity >= 2 and confidence >= 4:
+            if severity >= 2 and confidence >= 2:
                 rule_count += 1
 
-        if rule_count >= 3:
+        if rule_count >= 5:
             return "malicious"
         return "benign"
     except Exception:

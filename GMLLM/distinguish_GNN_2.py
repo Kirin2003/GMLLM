@@ -299,7 +299,7 @@ def run_base_model(
     )
 
     # 保存结果
-    results_dir = Path("./results")
+    results_dir = Path("../results")
     os.makedirs(results_dir, exist_ok=True)
     with open(results_dir / result_file, 'w') as f:
         json.dump(test_results, f, indent=2)
