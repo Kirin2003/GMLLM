@@ -3,30 +3,26 @@
 from typing import Any, Optional
 import os
 
-PROVIDER_BASE_URLS = {
-    "qwen": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    "openai": "https://api.openai.com/v1",
-}
-
-
-def get_llm_client(provider: str = "qwen", model: Optional[str] = None) -> Any:
+def get_llm_client(provider: str = "qwen", model: Optional[str] = None, config: Optional[dict] = None) -> Any:
     """
     根据 provider 创建 LLM 客户端
 
     Args:
         provider: "qwen" | "openai" | "azure" | "local"
         model: 模型名称（可选）
+        config: 完整的 LLM 配置字典（可选）
 
     Returns:
         配置好的 OpenAI/AzureOpenAI 客户端对象
     """
-    if provider not in ("qwen", "openai"):
-        raise ValueError(f"Unknown provider: {provider}")
-    
+    if not config or provider not in config or "base_url" not in config[provider]:
+        raise ValueError(f"Provider or base_url not found in config: {provider}")
+
     from openai import OpenAI
 
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
-    base_url = PROVIDER_BASE_URLS.get(provider)
+    base_url = config[provider]["base_url"]
+
     return OpenAI(api_key=api_key, base_url=base_url)
 
     
