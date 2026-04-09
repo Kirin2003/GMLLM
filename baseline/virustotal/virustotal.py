@@ -234,7 +234,7 @@ def get_results_main():
 
 
 def main():
-    mode = "submit"  # "submit" or "results"
+    mode = "results"  # "submit" or "results"
 
     if mode == "submit":
         submit_scan_main()
