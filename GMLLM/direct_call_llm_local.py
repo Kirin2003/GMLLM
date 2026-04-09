@@ -2,13 +2,14 @@
 """PyPI 包安全分析工具 - 支持单包和批量分析"""
 import csv
 import json
+import os
 import time
 import yaml
 import argparse
 from pathlib import Path
 from typing import Optional, Dict, Tuple, List
 
-from llm_client import get_llm_client, get_model_name
+from llm_client import get_llm_client
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import sys
 sys.path.insert(0, "/Data2/hxq/GMLLM")  # 添加项目根目录到 Python 路径
@@ -31,51 +32,26 @@ def parse_args():
     return parser.parse_args()
 
 
-args = parse_args()
-_config_name = args.config
-_config_file = Path(__file__).parent / "configs" / f"direct_call_llm_{_config_name}.yaml"
-CONFIG = load_config(str(_config_file))
-
-logger = Logger(CONFIG["log_file"])
-
-# 加载 LLM 配置
-_llm_config_path = Path(__file__).parent / "configs" / "llm_config.json"
-with open(_llm_config_path, 'r') as f:
-    LLM_CONFIG = json.load(f)
-
-LLM_PROVIDER = CONFIG["llm_provider"]
-LLM_MODEL = get_model_name(LLM_PROVIDER, LLM_CONFIG)
-RESULT_FILENAME = CONFIG["result_filename"]
-
-# 调试日志：确认使用的模型和 base_url
-logger.log(f"[DEBUG] LLM 配置: provider={LLM_PROVIDER}, model={LLM_MODEL}")
-logger.log(f"[DEBUG] base_url: {LLM_CONFIG.get(LLM_PROVIDER, {}).get('base_url', 'NOT FOUND')}")
-
-system_prompt_a = """You are a PyPI package security auditor.
-You have been provided with the code of a PyPI package script.
-Please carefully analyze the possible malicious behaviors therein and answer the following:
-Is this code indicative of potential malicious activity? (Respond only with 'Malicious' or 'Benign')
-Provide your reasoning. Keep it as simple as possible.
-Response Format (must be in separate lines, use this exact format):
-Verdict: <Malicious or Benign>
-Reasoning: <filename> + <malicious code/function> + <malicious behavior>
-Example: Reasoning: __init__.py + os.system() + execute remote commands
-"""
+# 全局变量（由 main() 初始化）
+logger = None
+CONFIG = None
+LLM_CONFIG = None
+LLM_MODEL = None
+RESULT_FILENAME = None
 
 
-def get_max_source_chars(provider: str, llm_config: dict, ratio: float = 0.75) -> int:
+def get_max_source_chars(llm_config: dict, ratio: float = 0.75) -> int:
     """
     根据模型上下文长度计算源代码最大字符数
 
     Args:
-        provider: LLM provider 名称
         llm_config: LLM 配置字典
-        ratio: 使用上下文长度的比例（默认 85%，留空间给 prompt 和 response）
+        ratio: 使用上下文长度的比例（默认 75%，留空间给 prompt 和 response）
 
     Returns:
         最大字符数
     """
-    context_length = llm_config.get(provider, {}).get("context_length", 125000)
+    context_length = llm_config.get("context_length", 125000)
     # 约 1 token ≈ 4 字符
     return int(context_length * ratio * 4)
 
@@ -90,6 +66,7 @@ def get_all_py_files(package_path: Path) -> str:
     Returns:
         拼接后的源代码字符串
     """
+    global logger
     all_code = []
     for py_file in package_path.rglob("*.py"):
         try:
@@ -113,11 +90,26 @@ def query_llm_for_verdict(source_code: str) -> Tuple[Optional[str], Optional[dic
     Returns:
         (LLM响应文本, token使用信息, 是否截断, 耗时秒) 元组
     """
-    client = get_llm_client(LLM_PROVIDER, LLM_MODEL, LLM_CONFIG)
+    global logger, LLM_CONFIG, LLM_MODEL
+
+    system_prompt = """You are a PyPI package security auditor.
+        You have been provided with the code of a PyPI package script.
+        Please carefully analyze the possible malicious behaviors therein and answer the following:
+        Is this code indicative of potential malicious activity? (Respond only with 'Malicious' or 'Benign')
+        Provide your reasoning. Keep it as simple as possible.
+        Response Format (must be in separate lines, use this exact format):
+        Verdict: <Malicious or Benign>
+        Reasoning: <filename> + <malicious code/function> + <malicious behavior>
+        Example: Reasoning: __init__.py + os.system() + execute remote commands
+        """
+
+    api_key = LLM_CONFIG["api_key_env"]
+    base_url = LLM_CONFIG["base_url"]
+    client = get_llm_client(api_key, base_url)
     truncated = False
     duration = None
 
-    max_chars = get_max_source_chars(LLM_PROVIDER, LLM_CONFIG)
+    max_chars = get_max_source_chars(LLM_CONFIG)
     if len(source_code) > max_chars:
         truncated = True
         logger.log(f"源代码过长 ({len(source_code)} 字符)，截断至 {max_chars} 字符")
@@ -128,7 +120,7 @@ def query_llm_for_verdict(source_code: str) -> Tuple[Optional[str], Optional[dic
         response = client.chat.completions.create(
             model=LLM_MODEL,
             messages=[
-                {"role": "system", "content": system_prompt_a},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": source_code}
             ],
             temperature=0.1,
@@ -188,6 +180,7 @@ def analyze_package(package_path: str, output_path: Optional[str] = None) -> Dic
     Returns:
         分析结果字典
     """
+    global logger, RESULT_FILENAME
     package_path = Path(package_path)
     package_name = package_path.name
 
@@ -296,6 +289,7 @@ def batch_analyze_packages(dataset_base: str, max_workers: int = 4):
         dataset_base: 数据集根目录
         max_workers: 并发数，默认 8
     """
+    global logger, CONFIG, RESULT_FILENAME
     base_path = Path(dataset_base)
 
     # 统计信息
@@ -307,7 +301,7 @@ def batch_analyze_packages(dataset_base: str, max_workers: int = 4):
     pending_tasks = []  # (package_dir, json_path, month, package_type, package_name)
 
     # allowed_months = generate_month_range("2023-03", "2024-12")
-    allowed_months = generate_month_range("2023-03", "2024-12") # TODO 先只处理到 2023-10，后续再处理后续月份
+    allowed_months = generate_month_range(CONFIG["start_month"], CONFIG["end_month"])
     # for package_type in ["malicious", "benign"]:
     for package_type in ["benign", "malicious"]: # TODO 先只处理 malicious，后续再处理 benign
         type_dir = base_path / package_type
@@ -367,6 +361,24 @@ def batch_analyze_packages(dataset_base: str, max_workers: int = 4):
 
 def main():
     """批量分析数据集"""
+    global logger, CONFIG, LLM_CONFIG, LLM_MODEL, RESULT_FILENAME
+
+    args = parse_args()
+    _config_name = args.config
+    _config_file = Path(__file__).parent / "configs" / f"direct_call_llm_{_config_name}.yaml"
+    CONFIG = load_config(str(_config_file))
+
+    logger = Logger(CONFIG["log_file"])
+
+    # 加载 LLM 配置（内联在 YAML 中）
+    LLM_CONFIG = CONFIG["llm"]
+    LLM_MODEL = LLM_CONFIG["model"]
+    RESULT_FILENAME = CONFIG["result_filename"]
+
+    # 调试日志：确认使用的模型和 base_url
+    logger.log(f"[DEBUG] LLM 配置: model={LLM_MODEL}")
+    logger.log(f"[DEBUG] base_url: {LLM_CONFIG.get('base_url', 'NOT FOUND')}")
+
     dataset_base = "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset"
     batch_analyze_packages(dataset_base)
 

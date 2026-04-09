@@ -2,8 +2,17 @@
 
 log_file: "direct_call_llm_qwen2_5.log"
 
-# LLM provider 名称（对应 llm_config.json 中的 key）
-llm_provider: "qwen2.5-coder-32b-local"
+# LLM 配置（内联，不再依赖 llm_config.json）
+llm_provider: "qwen2.5-coder-32b"
+llm:
+  model: "qwen-2.5-coder-32b"
+  api_key_env: "123"
+  base_url: "http://192.168.1.101:60102/v1"
+  context_length: 32768
 
 # 批量分析时每个包的结果文件名
 result_filename: "qwen2_5.json"
+
+# 增量扫描月份范围
+start_month: "2023-03"
+end_month: "2024-12"

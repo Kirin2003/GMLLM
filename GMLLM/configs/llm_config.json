@@ -25,6 +25,12 @@
     "base_url": "http://192.168.1.101:60102/v1",
     "context_length": 32768
   },
+  "llama2-70b-local": {
+      "model": "llama-2",
+      "api_key_env": "123",
+      "base_url": "http://192.168.1.101:60101/v1",
+      "context_length": 163840
+  },
   "openai": {
     "model": "gpt-4o",
     "api_key_env": "OPENAI_API_KEY"

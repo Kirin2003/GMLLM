@@ -1,18 +1,18 @@
 # direct_call_llm 配置
 
-log_file: "direct_call_llm_qwen3_5.log"
+log_file: "direct_call_llm_llama2.log"
 
 # LLM 配置（内联，不再依赖 llm_config.json）
-llm_provider: "qwen3.5-27b"
+llm_provider: "llama2"
 llm:
-  model: "qwen-3.5-27b"
+  model: "llama-2"
   api_key_env: "123"
   base_url: "http://192.168.1.101:60101/v1"
-  context_length: 163840
+  context_length: 4096
 
 # 批量分析时每个包的结果文件名
-result_filename: "qwen3_5_27b.json"
+result_filename: "llama2.json"
 
 # 增量扫描月份范围
-start_month: "2023-03"
+start_month: "2023-08"
 end_month: "2024-12"

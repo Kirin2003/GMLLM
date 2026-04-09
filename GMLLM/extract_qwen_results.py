@@ -59,16 +59,23 @@ def extract_qwen_results_to_csv(dataset_base: str, output_csv: str, json_filenam
 
 
 if __name__ == "__main__":
-    model_name = "qwen2_5"
+    dataset_base = "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset"
+    model_name = "deepseek"
     if model_name == "qwen3_5_27b":
-        dataset_base = "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset"
         output_csv = "/Data2/hxq/GMLLM/results/direct_call_llm_local.csv"
         json_filename = "qwen3_5_27b.json"
         extract_qwen_results_to_csv(dataset_base, output_csv, json_filename)
     elif model_name == "qwen2_5":
-        dataset_base = "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset"
         output_csv = "/Data2/hxq/GMLLM/results/direct_call_llm_local_qwen2_5.csv"
         json_filename = "qwen2_5.json"
+        extract_qwen_results_to_csv(dataset_base, output_csv, json_filename)
+    elif model_name == "deepseek":
+        output_csv = "/Data2/hxq/GMLLM/results/direct_call_llm_local_deepseek.csv"
+        json_filename = "deepseek.json"
+        extract_qwen_results_to_csv(dataset_base, output_csv, json_filename)
+    elif model_name == "llama2":
+        output_csv = "/Data2/hxq/GMLLM/results/direct_call_llm_local_llama2.csv"
+        json_filename = "llama2.json"
         extract_qwen_results_to_csv(dataset_base, output_csv, json_filename)
     else:
         print(f"未知的模型名称: {model_name}")

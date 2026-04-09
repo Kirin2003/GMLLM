@@ -26,32 +26,38 @@ def calculate_metrics(input_csv: str, output_json: str):
     precision_list = []
     recall_list = []
     f1_list = []
+    accuracy_list = []
 
     for month in months:
         rows = monthly[month]
-        tp = fp = fn = 0
+        tp = fp = fn = tn = 0
         for row in rows:
             pred = row['verdict'].strip()
             actual = row['package_type'].strip()
             if pred == 'Malicious' and actual == 'malicious':
                 tp += 1
-            elif pred == 'Malicious' and actual == 'benign':
+            elif pred == 'Benign' and actual == 'benign':
+                tn += 1
+            elif pred != 'Benign' and actual == 'benign':
                 fp += 1
-            elif pred in ('Benign', 'Error') and actual == 'malicious':
+            elif pred != 'Malicious' and actual == 'malicious':
                 fn += 1
 
         prec = tp / (tp + fp) if (tp + fp) > 0 else 0
         rec = tp / (tp + fn) if (tp + fn) > 0 else 0
         f1 = 2 * prec * rec / (prec + rec) if (prec + rec) > 0 else 0
+        acc = (tp + tn) / (tp + tn + fp + fn) if (tp + tn + fp + fn) > 0 else 0
 
         precision_list.append(prec)
         recall_list.append(rec)
         f1_list.append(f1)
+        accuracy_list.append(acc)
 
     # Calculate averages
     avg_precision = sum(precision_list) / len(precision_list)
     avg_recall = sum(recall_list) / len(recall_list)
     avg_f1 = sum(f1_list) / len(f1_list)
+    avg_accuracy = sum(accuracy_list) / len(accuracy_list)
 
     # Build result
     result = {
@@ -59,9 +65,11 @@ def calculate_metrics(input_csv: str, output_json: str):
         "f1": f1_list,
         "precision": precision_list,
         "recall": recall_list,
+        "accuracy": accuracy_list,
         "avg_f1": avg_f1,
         "avg_precision": avg_precision,
-        "avg_recall": avg_recall
+        "avg_recall": avg_recall,
+        "avg_accuracy": avg_accuracy
     }
 
     # Save
@@ -73,6 +81,7 @@ def calculate_metrics(input_csv: str, output_json: str):
     print(f"Avg precision: {avg_precision:.4f}")
     print(f"Avg recall: {avg_recall:.4f}")
     print(f"Avg f1: {avg_f1:.4f}")
+    print(f"Avg accuracy: {avg_accuracy:.4f}")
 
 
 if __name__ == "__main__":
@@ -85,4 +94,9 @@ if __name__ == "__main__":
     calculate_metrics(
         '/Data2/hxq/GMLLM/results/direct_call_llm_local_qwen2_5.csv',
         '/Data2/hxq/GMLLM/results/direct_call_llm_local_qwen2_5.json'
+    )
+    # deepseek results
+    calculate_metrics(
+        '/Data2/hxq/GMLLM/results/direct_call_llm_local_deepseek.csv',
+        '/Data2/hxq/GMLLM/results/direct_call_llm_local_deepseek.json'
     )
