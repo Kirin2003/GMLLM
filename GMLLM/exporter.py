@@ -31,9 +31,9 @@ def quick_validate(graph: dict):
     for e in graph["links"]:
         missing = REQUIRED_LINK_FIELDS - set(e.keys())
         assert not missing, f"link missing fields: {missing}"
-def save_call_graph(graph: dict, out_dir: Path):
-    out_dir.mkdir(parents=True, exist_ok=True)
+def save_call_graph(graph: dict, out_path: Path):
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     quick_validate(graph)
     # 清理无效代理字符后写入
     clean_graph = _clean_invalid_surrogates(graph)
-    (out_dir / "call_graph.json").write_text(json.dumps(clean_graph, ensure_ascii=False, indent=2), encoding="utf-8")
+    out_path.write_text(json.dumps(clean_graph, ensure_ascii=False, indent=2), encoding="utf-8")

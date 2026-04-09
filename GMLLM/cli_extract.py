@@ -27,14 +27,13 @@ def extract_call_graph(detector: LLMBehaviorDetector,
     Args:
         detector: 预配置的检测器（用于批量处理时复用规则）
         src_path: Python项目/包源码目录
-        out_path: 输出目录
+        out_path: 输出文件完整路径
 
     Returns:
         dict: call graph数据 (包含nodes和links)
     """
     src_path = Path(src_path)
     out_path = Path(out_path)
-    out_path.mkdir(parents=True, exist_ok=True)
 
     # 构建图
     gb = ProjectGraphBuilder()
@@ -52,20 +51,21 @@ def extract_call_graph(detector: LLMBehaviorDetector,
     graph = gb.to_jsonable()
     save_call_graph(graph, out_path)
 
-    print(f"[ok] wrote {out_path / 'call_graph.json'} with {len(graph['nodes'])} nodes and {len(graph['links'])} links.")
+    print(f"[ok] wrote {out_path} with {len(graph['nodes'])} nodes and {len(graph['links'])} links.")
     return graph
 
 
 import time
 
 
-def batch_extract_call_graphs(detector: LLMBehaviorDetector, base_path: Path | str):
+def batch_extract_call_graphs(detector: LLMBehaviorDetector, base_path: Path | str, model_name: str):
     """
     批量处理所有月份的恶意包和良性包，生成call graph。
 
     Args:
         detector: 预配置的检测器
         base_path: incremental_packages 的父目录
+        model_name: 模型名称（用于生成文件名）
     """
     base_path = Path(base_path)
 
@@ -108,7 +108,7 @@ def batch_extract_call_graphs(detector: LLMBehaviorDetector, base_path: Path | s
                 pkg_start = time.time()
                 log.log(f"    处理包: {pkg.name}")
 
-                out_path = pkg
+                out_path = pkg / f"{model_name}_call_graph.json"
                 try:
                     # 传入已配置好的 detector，复用规则
                     extract_call_graph(
@@ -144,7 +144,7 @@ if __name__ == "__main__":
 
     model_name = llm_config.get("model_name", "qwen3-max")
     synth_rules = llm_config.get("synth_rules", False)
-    synth_path = Path(llm_config.get("synth_rules_path", "./synth_rules.json"))
+    synth_path = Path(f"./{model_name}_synth_rules.json")
     pkg_path = dataset_config.get("base_path", "")
 
     log.log("=" * 60)
@@ -179,7 +179,8 @@ if __name__ == "__main__":
     overall_start = time.time()
     batch_extract_call_graphs(
         detector=detector,
-        base_path=pkg_path
+        base_path=pkg_path,
+        model_name=model_name,
     )
     total_time = time.time() - overall_start
     log.log(f"Total execution time: {total_time:.1f}s ({total_time/60:.1f}min)")
