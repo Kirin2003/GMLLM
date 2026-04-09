@@ -1,0 +1,10 @@
+# 继承自 default.yaml
+parent: "default.yaml"
+
+# 覆盖 paths 配置
+paths:
+  prefix: "upper_model_"
+
+# 覆盖 results 配置
+results:
+  accumulate_train: "upper_train_results.json"

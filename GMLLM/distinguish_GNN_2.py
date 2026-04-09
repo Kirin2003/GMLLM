@@ -13,6 +13,7 @@ import yaml
 from utils.config_utils import load_config
 from torch_geometric.nn import GCNConv, global_mean_pool
 from torch.utils.data import ConcatDataset
+from torch_geometric.loader import DataLoader
 from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
 import random
 import numpy as np
@@ -274,17 +275,17 @@ def run_base_model(
     criterion = torch.nn.CrossEntropyLoss()
 
     # 训练模型
-    # model, best_val_f1 = train_model(
-    #     model=model,
-    #     train_loader=train_loader,
-    #     val_loader=val_loader,
-    #     optimizer=optimizer,
-    #     criterion=criterion,
-    #     device=device,
-    #     epochs=epochs,
-    #     patience=patience,
-    #     model_save_path=model_save_path
-    # )
+    model, best_val_f1 = train_model(
+        model=model,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        optimizer=optimizer,
+        criterion=criterion,
+        device=device,
+        epochs=epochs,
+        patience=patience,
+        model_save_path=model_save_path
+    )
 
     # 加载最优模型
     model.load_state_dict(torch.load(model_save_path, map_location=device))
@@ -298,7 +299,7 @@ def run_base_model(
     )
 
     # 保存结果
-    results_dir = Path("./results")
+    results_dir = Path("../results")
     os.makedirs(results_dir, exist_ok=True)
     with open(results_dir / result_file, 'w') as f:
         json.dump(test_results, f, indent=2)

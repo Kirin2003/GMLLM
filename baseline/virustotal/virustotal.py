@@ -81,7 +81,8 @@ def submit_scan_main():
 
     # Labels and their directories
     label_dirs = [
-        ("malicious", f"{base_dir}/malicious"),
+        ("benign", f"{base_dir}/benign"),
+        #("malicious", f"{base_dir}/malicious"),
     ]
 
     months = [f"2023-{m:02d}" for m in range(3, 13)] + [f"2024-{m:02d}" for m in range(1, 4)]
@@ -233,13 +234,81 @@ def get_results_main():
             time.sleep(15.5)
 
 
-def main():
-    mode = "results"  # "submit" or "results"
+def compute_metrics():
+    """Compute precision/recall/f1 for malicious package detection per month.
 
-    if mode == "submit":
-        submit_scan_main()
-    else:
-        get_results_main()
+    Uses virustotal_benign.csv and virustotal_malicious.csv.
+    y_true: label == 'malicious'
+    y_pred: verdict in ('MALICIOUS', 'SUSPICIOUS') (positive if any engine flags)
+
+    Output: JSON saved to ../../results/virustotal.json with format:
+        {"month": [...], "f1": [...], "precision": [...], "recall": [...]}
+    """
+    import json
+    from sklearn.metrics import precision_recall_fscore_support
+
+    benign_csv = "../../results/virustotal_benign.csv"
+    malicious_csv = "../../results/virustotal_malicious.csv"
+
+    # Read both CSVs
+    rows = []
+    for csv_path in [benign_csv, malicious_csv]:
+        with open(csv_path, "r") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                rows.append(row)
+
+    # Filter months 2023-03 to 2024-12
+    valid_months = [f"2023-{m:02d}" for m in range(3, 13)] + [f"2024-{m:02d}" for m in range(1, 13)]
+    valid_months_set = set(valid_months)
+
+    filtered_rows = [r for r in rows if r['month'] in valid_months_set]
+
+    # Compute per-month metrics
+    from collections import defaultdict
+    by_month = defaultdict(list)
+    for row in filtered_rows:
+        by_month[row['month']].append(row)
+
+    results = []
+    for month in sorted(valid_months):
+        month_rows = by_month.get(month, [])
+        if not month_rows:
+            continue
+
+        y_true = [1 if r['label'] == 'malicious' else 0 for r in month_rows]
+        y_pred = [1 if r['verdict'] in ('MALICIOUS', 'SUSPICIOUS') else 0 for r in month_rows]
+
+        p, r, f1, _ = precision_recall_fscore_support(y_true, y_pred, pos_label=1, average='binary', zero_division=0)
+        results.append({'month': month, 'precision': p, 'recall': r, 'f1': f1})
+
+    # Save JSON
+    output_json = "../../results/virustotal.json"
+    json_data = {
+        "month": [r['month'] for r in results],
+        "f1": [r['f1'] for r in results],
+        "precision": [r['precision'] for r in results],
+        "recall": [r['recall'] for r in results]
+    }
+    with open(output_json, "w") as f:
+        json.dump(json_data, f, indent=2)
+
+    print(f"{'month':<10} {'precision':>10} {'recall':>10} {'f1':>10}")
+    print("-" * 42)
+    for r in results:
+        print(f"{r['month']:<10} {r['precision']:>10.4f} {r['recall']:>10.4f} {r['f1']:>10.4f}")
+    print(f"\nResults saved to {output_json}")
+
+
+def main():
+    # mode = "results"  # "submit" or "results"
+
+    # if mode == "submit":
+    #     submit_scan_main()
+    # else:
+    #     get_results_main()
+
+    compute_metrics()
 
 
 if __name__ == "__main__":
