@@ -61,12 +61,14 @@ def build_graph_from_json(call_graph_path: Path, name2idx: dict, type2idx: dict,
             edges.append([src, tgt])
             edge_attrs.append(edge_type2idx.get(edge_type, -1))
 
+    # batch: 每个节点所属的图编号, 单图设为全0. 注意: 使用DataLoader时会自动生成, test_single_package场景需要手动设置.
     data = Data(
         x_names=torch.tensor(name_ids, dtype=torch.long),
         x_types=torch.tensor(type_ids, dtype=torch.long),
         x_behaviors=torch.stack(behavior_feats),
         edge_index=torch.tensor(edges, dtype=torch.long).t().contiguous() if edges else torch.empty((2, 0), dtype=torch.long),
         edge_attr=torch.tensor(edge_attrs, dtype=torch.long),
+        batch=torch.zeros(len(name_ids), dtype=torch.long),  # TODO: 使用DataLoader时删除此行
         name=call_graph_path.parent.name
     )
     if label is not None:

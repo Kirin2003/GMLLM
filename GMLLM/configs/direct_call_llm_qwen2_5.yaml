@@ -1,0 +1,9 @@
+# direct_call_llm 配置
+
+log_file: "direct_call_llm_qwen2_5.log"
+
+# LLM provider 名称（对应 llm_config.json 中的 key）
+llm_provider: "qwen2.5-coder-32b-local"
+
+# 批量分析时每个包的结果文件名
+result_filename: "qwen2_5.json"

@@ -1,0 +1,123 @@
+{
+  "model_path": "/Data2/hxq/GMLLM/GMLLM/models/incremental_unk_model_2023-12.pt",
+  "test_data": {
+    "malicious": {
+      "path": "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/malicious/2024-01",
+      "total": 24,
+      "mismatches": 11
+    },
+    "benign": {
+      "path": "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset/benign/2024-01",
+      "total": 24,
+      "mismatches": 1
+    }
+  },
+  "summary": {
+      "total_packages": 48,
+      "total_mismatches": 12,
+      "accuracy": "75.00%",
+      "malicious_class": {
+          "precision": 0.8,
+          "recall": 0.6667,
+          "f1": 0.7273
+      }
+  },
+  "mismatches": [
+    {
+      "package_name": "NP6HelperHttptest-0.4",
+      "true_label": "malicious",
+      "predicted_label": "benign",
+      "pred_class": 0,
+      "prob_benign": 0.636175274848938,
+      "prob_malicious": 0.363824725151062
+    },
+    {
+      "package_name": "NP6HelperHttptest-0.5",
+      "true_label": "malicious",
+      "predicted_label": "benign",
+      "pred_class": 0,
+      "prob_benign": 0.5571759939193726,
+      "prob_malicious": 0.44282394647598267
+    },
+    {
+      "package_name": "NP6HelperHttptest-0.6",
+      "true_label": "malicious",
+      "predicted_label": "benign",
+      "pred_class": 0,
+      "prob_benign": 0.5571759939193726,
+      "prob_malicious": 0.44282394647598267
+    },
+    {
+      "package_name": "codeui-0.0.1",
+      "true_label": "malicious",
+      "predicted_label": "benign",
+      "pred_class": 0,
+      "prob_benign": 0.7520392537117004,
+      "prob_malicious": 0.24796082079410553
+    },
+    {
+      "package_name": "directui-0.0.1",
+      "true_label": "malicious",
+      "predicted_label": "benign",
+      "pred_class": 0,
+      "prob_benign": 0.6549674868583679,
+      "prob_malicious": 0.3450325131416321
+    },
+    {
+      "package_name": "flagui-0.0.1",
+      "true_label": "malicious",
+      "predicted_label": "benign",
+      "pred_class": 0,
+      "prob_benign": 0.7119942307472229,
+      "prob_malicious": 0.2880057394504547
+    },
+    {
+      "package_name": "genui-0.0.1",
+      "true_label": "malicious",
+      "predicted_label": "benign",
+      "pred_class": 0,
+      "prob_benign": 0.568352222442627,
+      "prob_malicious": 0.43164780735969543
+    },
+    {
+      "package_name": "monkeyui-0.0.1",
+      "true_label": "malicious",
+      "predicted_label": "benign",
+      "pred_class": 0,
+      "prob_benign": 0.7822375297546387,
+      "prob_malicious": 0.21776250004768372
+    },
+    {
+      "package_name": "swapmempool-1.0.8",
+      "true_label": "malicious",
+      "predicted_label": "benign",
+      "pred_class": 0,
+      "prob_benign": 0.5569466948509216,
+      "prob_malicious": 0.44305330514907837
+    },
+    {
+      "package_name": "testing1232-0.0.1",
+      "true_label": "malicious",
+      "predicted_label": "benign",
+      "pred_class": 0,
+      "prob_benign": 0.9683340191841125,
+      "prob_malicious": 0.031665947288274765
+    },
+    {
+      "package_name": "update-mss-0.0.1",
+      "true_label": "malicious",
+      "predicted_label": "benign",
+      "pred_class": 0,
+      "prob_benign": 0.9941323399543762,
+      "prob_malicious": 0.005867671687155962
+    },
+    {
+      "package_name": "fake-bpy-module-20240113",
+      "true_label": "benign",
+      "predicted_label": "malicious",
+      "pred_class": 1,
+      "prob_benign": 0.45781776309013367,
+      "prob_malicious": 0.5421822667121887
+    }
+  ]
+}

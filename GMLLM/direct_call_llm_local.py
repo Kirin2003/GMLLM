@@ -2,25 +2,50 @@
 """PyPI 包安全分析工具 - 支持单包和批量分析"""
 import csv
 import json
+import time
+import yaml
+import argparse
 from pathlib import Path
 from typing import Optional, Dict, Tuple, List
 
 from llm_client import get_llm_client, get_model_name
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import sys
 sys.path.insert(0, "/Data2/hxq/GMLLM")  # 添加项目根目录到 Python 路径
 
 from utils.logger_utils import Logger
 from utils.month_utils import generate_month_range
 
-logger = Logger("direct_call_llm_2.log")
+
+def load_config(config_path: str) -> dict:
+    """加载 direct_call_llm 配置文件"""
+    with open(config_path, 'r') as f:
+        return yaml.safe_load(f)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="PyPI 包安全分析工具")
+    parser.add_argument('--config', '-c', type=str,
+                        default='qwen3_5',
+                        help='配置文件名（不含路径和后缀），默认 qwen3_5')
+    return parser.parse_args()
+
+
+args = parse_args()
+_config_name = args.config
+_config_file = Path(__file__).parent / "configs" / f"direct_call_llm_{_config_name}.yaml"
+CONFIG = load_config(str(_config_file))
+
+logger = Logger(CONFIG["log_file"])
 
 # 加载 LLM 配置
-config_path = Path(__file__).parent / "configs" / "llm_config.json"
-with open(config_path, 'r') as f:
+_llm_config_path = Path(__file__).parent / "configs" / "llm_config.json"
+with open(_llm_config_path, 'r') as f:
     LLM_CONFIG = json.load(f)
 
-LLM_PROVIDER = LLM_CONFIG.get('provider', 'qwen3.5-27b')
+LLM_PROVIDER = CONFIG["llm_provider"]
 LLM_MODEL = get_model_name(LLM_PROVIDER, LLM_CONFIG)
+RESULT_FILENAME = CONFIG["result_filename"]
 
 # 调试日志：确认使用的模型和 base_url
 logger.log(f"[DEBUG] LLM 配置: provider={LLM_PROVIDER}, model={LLM_MODEL}")
@@ -36,6 +61,23 @@ Verdict: <Malicious or Benign>
 Reasoning: <filename> + <malicious code/function> + <malicious behavior>
 Example: Reasoning: __init__.py + os.system() + execute remote commands
 """
+
+
+def get_max_source_chars(provider: str, llm_config: dict, ratio: float = 0.75) -> int:
+    """
+    根据模型上下文长度计算源代码最大字符数
+
+    Args:
+        provider: LLM provider 名称
+        llm_config: LLM 配置字典
+        ratio: 使用上下文长度的比例（默认 85%，留空间给 prompt 和 response）
+
+    Returns:
+        最大字符数
+    """
+    context_length = llm_config.get(provider, {}).get("context_length", 125000)
+    # 约 1 token ≈ 4 字符
+    return int(context_length * ratio * 4)
 
 
 def get_all_py_files(package_path: Path) -> str:
@@ -61,7 +103,7 @@ def get_all_py_files(package_path: Path) -> str:
     return "".join(all_code)
 
 
-def query_llm_for_verdict(source_code: str) -> Tuple[Optional[str], Optional[dict]]:
+def query_llm_for_verdict(source_code: str) -> Tuple[Optional[str], Optional[dict], bool, Optional[float]]:
     """
     调用 LLM 获取包的判定结果
 
@@ -69,40 +111,46 @@ def query_llm_for_verdict(source_code: str) -> Tuple[Optional[str], Optional[dic
         source_code: 包的源代码
 
     Returns:
-        (LLM响应文本, token使用信息) 元组
+        (LLM响应文本, token使用信息, 是否截断, 耗时秒) 元组
     """
     client = get_llm_client(LLM_PROVIDER, LLM_MODEL, LLM_CONFIG)
+    truncated = False
+    duration = None
 
-    max_chars = 262144  # 根据模型上下文限制
+    max_chars = get_max_source_chars(LLM_PROVIDER, LLM_CONFIG)
+    if len(source_code) > max_chars:
+        truncated = True
+        logger.log(f"源代码过长 ({len(source_code)} 字符)，截断至 {max_chars} 字符")
+        source_code = source_code[:max_chars]
 
+    start_time = time.time()
     try:
         response = client.chat.completions.create(
             model=LLM_MODEL,
             messages=[
                 {"role": "system", "content": system_prompt_a},
-                {"role": "user", "content": source_code[:max_chars]}
+                {"role": "user", "content": source_code}
             ],
             temperature=0.1,
-            max_tokens=1024,
-            # 【关键修改】通过 extra_body 传入 enable_thinking=False 关闭推理模式
-            extra_body={
-                "enable_thinking": False
-            }
+            timeout=120,
         )
-        content = response.choices[0].message.content.strip()
-        usage = {
-            "prompt_tokens": response.usage.prompt_tokens,
-            "completion_tokens": response.usage.completion_tokens,
-            "total_tokens": response.usage.total_tokens
-        }
-        return content, usage
     except Exception as e:
-        error_msg = str(e)
         logger.log(f"LLM 调用失败: {e}")
-        # 检测额度耗尽错误 (403 AllocationQuota.FreeTierOnly)，重新抛出让上层处理
-        if "403" in error_msg and ("Quota" in error_msg or "FreeTierOnly" in error_msg or "AllocationQuota" in error_msg):
-            raise
-        return None, None
+        duration = time.time() - start_time
+        return None, None, truncated, duration
+
+    duration = time.time() - start_time
+    logger.log(f"LLM 原始响应: {response}")
+    msg = response.choices[0].message
+    # 优先用 content，fallback 到 reasoning
+    content = msg.content.strip() if msg.content else (msg.reasoning or "").strip()
+    usage = {
+        "prompt_tokens": response.usage.prompt_tokens,
+        "completion_tokens": response.usage.completion_tokens,
+        "total_tokens": response.usage.total_tokens
+    }
+    logger.log(f"LLM 调用成功，耗时: {duration:.2f}s（截断: {truncated}）")
+    return content, usage, truncated, duration
 
 
 def parse_llm_response(response_text: str) -> Dict[str, str]:
@@ -152,18 +200,22 @@ def analyze_package(package_path: str, output_path: Optional[str] = None) -> Dic
         result = {
             "package_name": package_name,
             "verdict": "Error",
-            "reasoning": "No Python files found in the package"
+            "reasoning": "No Python files found in the package",
+            "truncated": False,
+            "duration": None,
         }
     else:
         logger.log(f"已读取源代码长度: {len(source_code)} 字符")
 
         # 2. 调用 LLM 分析
-        llm_response, token_usage = query_llm_for_verdict(source_code)
+        llm_response, token_usage, truncated, duration = query_llm_for_verdict(source_code)
         if not llm_response:
             result = {
                 "package_name": package_name,
                 "verdict": "Error",
-                "reasoning": "Failed to get response from LLM"
+                "reasoning": "Failed to get response from LLM",
+                "truncated": truncated,
+                "duration": duration,
             }
         else:
             logger.log(f"LLM 响应: {llm_response[:200]}...")
@@ -179,6 +231,8 @@ def analyze_package(package_path: str, output_path: Optional[str] = None) -> Dic
                 "prompt_tokens": token_usage.get("prompt_tokens") if token_usage else None,
                 "completion_tokens": token_usage.get("completion_tokens") if token_usage else None,
                 "total_tokens": token_usage.get("total_tokens") if token_usage else None,
+                "truncated": truncated,
+                "duration": round(duration, 2) if duration else None,
             }
 
     # 4. 输出结果
@@ -205,7 +259,7 @@ def save_to_csv(results: List[Dict], csv_path: str):
     """
     csv_file = Path(csv_path)
     fieldnames = ["package_name", "verdict", "reasoning", "prompt_tokens",
-                  "completion_tokens", "total_tokens", "month", "type"]
+                  "completion_tokens", "total_tokens", "month", "type", "truncated", "duration"]
 
     # 检查文件是否存在，决定是追加还是新建
     file_exists = csv_file.exists()
@@ -225,22 +279,23 @@ def save_to_csv(results: List[Dict], csv_path: str):
                 "completion_tokens": r.get("completion_tokens", ""),
                 "total_tokens": r.get("total_tokens", ""),
                 "month": r.get("month", ""),
-                "type": r.get("package_type", "")
+                "type": r.get("package_type", ""),
+                "truncated": r.get("truncated", ""),
+                "duration": r.get("duration", ""),
             }
             writer.writerow(row)
 
     logger.log(f"CSV 已保存到: {csv_path}")
 
 
-def batch_analyze_packages(dataset_base: str):
+def batch_analyze_packages(dataset_base: str, max_workers: int = 4):
     """
-    批量分析数据集下的所有包
+    批量分析数据集下的所有包（并发版本）
 
     Args:
         dataset_base: 数据集根目录
+        max_workers: 并发数，默认 8
     """
-    import time
-
     base_path = Path(dataset_base)
 
     # 统计信息
@@ -248,48 +303,26 @@ def batch_analyze_packages(dataset_base: str):
     processed = 0
     skipped = 0
 
-    # 先统计总数（只统计 2023-03 到 2024-12 的月份）
+    # 收集所有待处理任务
+    pending_tasks = []  # (package_dir, json_path, month, package_type, package_name)
+
     # allowed_months = generate_month_range("2023-03", "2024-12")
-    allowed_months = generate_month_range("2023-03", "2023-03") # TODO 先只处理到 2023-03，后续再处理后续月份
+    allowed_months = generate_month_range("2023-03", "2024-12") # TODO 先只处理到 2023-10，后续再处理后续月份
     # for package_type in ["malicious", "benign"]:
-    for package_type in ["malicious"]: # TODO 先只处理 malicious，后续再处理 benign
+    for package_type in ["benign", "malicious"]: # TODO 先只处理 malicious，后续再处理 benign
         type_dir = base_path / package_type
-        if not type_dir.exists():
-            continue
-        for month_dir in type_dir.iterdir():
-            if not month_dir.is_dir():
-                continue
-            if month_dir.name not in allowed_months:
-                continue
-            packages = [p for p in month_dir.iterdir() if p.is_dir()]
-            total_packages += len(packages)
 
-    logger.log(f"总共需要处理 {total_packages} 个包")
+        for month in allowed_months:
+            logger.log(f"扫描目录: {month} ({package_type})")
+            month_dir = type_dir / month
 
-    # 遍历处理
-    # for package_type in ["malicious", "benign"]:
-    for package_type in ["malicious"]: # TODO 先只处理 malicious，后续再处理 benign
-        type_dir = base_path / package_type
-        if not type_dir.exists():
-            continue
-
-        for month_dir in sorted(type_dir.iterdir()):
-            if not month_dir.is_dir():
-                continue
-            month = month_dir.name
-
-            # 只处理 2023-03 到 2024-12 的月份
-            # allowed_months = generate_month_range("2023-03", "2024-12")
-            allowed_months = generate_month_range("2023-03", "2023-03") # TODO 先只处理到 2023-03，后续再处理后续月份
-            if month not in allowed_months:
-                continue
-
-            for package_dir in sorted(month_dir.iterdir()):
+            for package_dir in sorted(month_dir.iterdir(), key=lambda p: p.name.lower()):
                 if not package_dir.is_dir():
                     continue
 
+                total_packages += 1
                 package_name = package_dir.name
-                json_path = package_dir / "qwen3_5_27b.json"
+                json_path = package_dir / RESULT_FILENAME
 
                 # 检查是否已处理
                 if json_path.exists():
@@ -297,31 +330,37 @@ def batch_analyze_packages(dataset_base: str):
                     skipped += 1
                     continue
 
-                logger.log(f"处理中: {package_name} ({month}/{package_type})")
+                pending_tasks.append((package_dir, json_path, month, package_type, package_name))
+
+    logger.log(f"总计: {total_packages}, 待处理: {len(pending_tasks)}, 跳过: {skipped}")
+
+    # 并发执行
+    def process_task(package_dir, json_path, month, package_type):
+        """处理单个包的任务"""
+        result = analyze_package(str(package_dir), str(json_path))
+        result["month"] = month
+        result["package_type"] = package_type
+        # 重新保存包含 month 和 package_type 的结果
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(result, f, indent=4, ensure_ascii=False)
+        return result
+
+    futures = {}
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        for package_dir, json_path, month, package_type, package_name in pending_tasks:
+            logger.log(f"提交任务: {package_name} ({month}/{package_type})")
+            future = executor.submit(process_task, package_dir, json_path, month, package_type)
+            futures[future] = package_name
+
+        for future in as_completed(futures):
+            package_name = futures[future]
+            try:
+                future.result()
                 processed += 1
-
-                try:
-                    # 分析包，结果保存到包目录下的 qwen3_5_27b.json
-                    result = analyze_package(str(package_dir), str(json_path))
-                    result["month"] = month
-                    result["package_type"] = package_type
-
-                    # 重新保存包含 month 和 package_type 的结果
-                    with open(json_path, 'w', encoding='utf-8') as f:
-                        json.dump(result, f, indent=4, ensure_ascii=False)
-
-                    # 每成功分析一个包后休息10秒
-                    time.sleep(10)
-
-                except Exception as e:
-                    error_msg = str(e)
-                    # 检测额度耗尽错误 (403 AllocationQuota.FreeTierOnly)
-                    if "403" in error_msg and ("Quota" in error_msg or "FreeTierOnly" in error_msg or "AllocationQuota" in error_msg):
-                        logger.log(f"额度耗尽，停止批量分析: {error_msg}")
-                        logger.log(f"完成! 总计: {total_packages}, 已处理: {processed}, 跳过: {skipped}")
-                        return
-
-                    logger.log(f"处理失败 {package_name}: {error_msg}")
+                if processed % 10 == 0:
+                    logger.log(f"进度: 已处理 {processed}/{len(pending_tasks)}")
+            except Exception as e:
+                logger.log(f"处理失败 {package_name}: {e}")
 
     logger.log(f"完成! 总计: {total_packages}, 已处理: {processed}, 跳过: {skipped}")
 
