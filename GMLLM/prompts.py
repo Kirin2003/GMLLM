@@ -4,6 +4,28 @@ Two prompt templates used by the detector:
 - PROMPT_DATA: classify a specific code node / snippet into behavior labels
 """
 
+PROMPT_COMM_SHORT = """You are an AI model designed to identify and analyze sensitive behaviors in Python programming code.
+Sensitive behaviors are actions or patterns that could cause security vulnerabilities, data privacy violations, or exposure of secrets.
+
+Task:
+- Produce a list of sensitive behavior CATEGORIES that are broadly useful for static analysis of Python projects.
+- For each behavior:
+  1) Provide a short explanation (one or two sentences) of why it is sensitive.
+  2) Provide a concise Python lambda rule that would match typical indicators using only a single string argument `n` (e.g., a qualified function/call name like "requests.post" or "os.system"). The lambda should return True when the indicator is present. Use valid Python. Example of valid style:  
+  "network": lambda n: n.startswith(('socket.', 'requests.', 'urllib.', 'httpx.', 'aiohttp.', 'ftplib.'))
+  "network_data_reception": lambda n: n.endswith(('.recv', '.recvfrom', '.read'))
+  "exec_eval": lambda n: any(x in n for x in ('eval', 'exec', 'os.system', 'subprocess.run'))
+
+Output format (STRICT JSON):
+{
+  "behaviors": [
+    {"name": "<category_name>", "why": "<brief explanation>",
+     "rule": "lambda n: <boolean expression using n>"},
+    ...
+  ]
+}
+"""
+
 PROMPT_COMM = """You are an AI model designed to identify and analyze sensitive behaviors in Python programming code.
 Sensitive behaviors are actions or patterns that could cause security vulnerabilities, data privacy violations, or exposure of secrets.
 They include (but are not limited to) insecure network operations, improper input handling, weak or misused cryptography, dynamic code execution, unsafe file/OS operations, persistence/privilege misuse, obfuscation, data exfiltration, and tracking.

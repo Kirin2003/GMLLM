@@ -100,3 +100,8 @@ if __name__ == "__main__":
         '/Data2/hxq/GMLLM/results/direct_call_llm_local_deepseek.csv',
         '/Data2/hxq/GMLLM/results/direct_call_llm_local_deepseek.json'
     )
+    # llama2 results
+    calculate_metrics(
+        '/Data2/hxq/GMLLM/results/direct_call_llm_local_llama2.csv',
+        '/Data2/hxq/GMLLM/results/direct_call_llm_local_llama2.json'
+    )

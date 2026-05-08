@@ -1,0 +1,60 @@
+# LLM 配置
+llm:
+  model_name: "qwen-2.5-coder-32b"
+  api_key_env: "123"
+  base_url: "http://192.168.1.101:60102/v1"
+  context_length: 32768
+  synth_rules: true
+  synth_rules_path: "./synth_rules.json"
+
+# 数据集配置
+dataset:
+  name: "incremental_packages_dynamic_capping_subset"
+  base_path: "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset"
+  vocab_dir: "vocab_qwen2_5"
+  benign_root: "benign"
+  malicious_root: "malicious"
+  benign_out: "benign_call_processed_qwen2_5"
+  malicious_out: "malicious_call_processed_qwen2_5"
+  call_graph_filename: "qwen-2.5-coder-32b_call_graph.json"
+
+# 训练配置
+training:
+  epochs: 60
+  batch_size: 128
+  learning_rate: 0.005
+  weight_decay: 0.001
+  patience: 10
+  seed: 42
+  train_ratio: 0.8
+  val_ratio: 0.1
+  num_workers: 4
+
+# 模型架构
+model:
+  hidden_dim: 64
+  num_classes: 2
+  dropout: 0.7
+
+# 增量学习配置
+continual_learning:
+  enabled: true
+  base_train_months: ['2022-01', '2023-12']
+  incremental_months: ['2024-01', '2024-12']
+  incremental_epochs: 5
+  memory_per_month: 10
+  use_memory: True
+
+# 结果文件配置
+results:
+  future_month: "CL_unk_test_than_train_future_month.json"
+
+# 路径配置
+paths:
+  models_dir: "./models"
+  results_dir: "../results"
+  pretrained_model: "./models/base_model.pt"
+  prefix: "incremental_unk_model_"
+
+# 设备配置 (auto/cuda/cpu)
+device: "auto"

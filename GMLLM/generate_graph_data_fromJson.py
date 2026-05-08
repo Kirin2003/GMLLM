@@ -19,13 +19,15 @@ from utils.month_utils import generate_month_range
 class CallGraphDatasetFull_Lazy(Dataset):
     def __init__(self, root_dir, output_dir=None, fixed_label=None,
                  name2idx=None, type2idx=None, edge_type2idx=None, behavior2idx=None,
-                 transform=None, pre_transform=None, start_month='2022-01', end_month='2024-12'):
+                 transform=None, pre_transform=None, start_month='2022-01', end_month='2024-12',
+                 call_graph_filename='call_graph.json'):
         self.root_dir = Path(root_dir)
         self.start_month = start_month
         self.end_month = end_month
         self.month_dirs = [self.root_dir / month for month in generate_month_range(start_month, end_month)]
         self.output_dir = Path(output_dir) if output_dir else self.root_dir / 'processed'
         self.fixed_label = fixed_label
+        self.call_graph_filename = call_graph_filename
         assert fixed_label is not None, "Must provide fixed_label"
         assert name2idx and type2idx and edge_type2idx and behavior2idx, "Must provide name2idx, type2idx, edge_type2idx, and behavior2idx"
         self.name2idx = name2idx
@@ -94,7 +96,7 @@ class CallGraphDatasetFull_Lazy(Dataset):
             print('Start processing month directory:', month_dir)
             graph_paths = []
             for folder in tqdm(os.listdir(month_dir), desc=f"Processing {month_dir.name}"):
-                call_graph_file = month_dir / folder / 'call_graph.json'
+                call_graph_file = month_dir / folder / self.call_graph_filename
                 if not call_graph_file.exists():
                     continue
                 try:
@@ -172,7 +174,7 @@ class CallGraphDatasetFull_Lazy(Dataset):
             return []
         return [self.get(i) for i in range(len(self.all_graph_paths))
                 if self.all_graph_paths[i].startswith(f"{month}/")]
-def build_global_vocab(root_dirs, start_month='2022-01', end_month='2023-02'):
+def build_global_vocab(root_dirs, start_month='2022-01', end_month='2023-02', call_graph_filename='call_graph.json'):
     print('Start building global vocab...')
     name_set, type_set, edge_type_set, behavior_set = set(), set(), set(), set()
     for root_dir in root_dirs:
@@ -180,7 +182,7 @@ def build_global_vocab(root_dirs, start_month='2022-01', end_month='2023-02'):
             print('Scanning month directory:', month)
             month_dir = Path(root_dir) / month
             for folder in tqdm(os.listdir(month_dir)):
-                json_path = month_dir / folder / "call_graph.json"
+                json_path = month_dir / folder / call_graph_filename
                 if not json_path.exists():
                     with open('error_log.txt', 'a') as log_f:
                         log_f.write(f"[MISSING] {json_path}\n")
@@ -213,8 +215,14 @@ def clean_dir(path):
 
 
 if __name__ == "__main__":
+    # 解析命令行参数
+    parser = argparse.ArgumentParser(description='Generate graph data from call_graph.json')
+    parser.add_argument('--config', type=str, default='./configs/default.yaml',
+                        help='Path to config file (default: ./configs/default.yaml)')
+    args = parser.parse_args()
+
     # 加载配置文件
-    config_path = "./configs/default.yaml"
+    config_path = args.config
     config = load_config(config_path)
 
     # 从配置中读取路径
@@ -224,6 +232,9 @@ if __name__ == "__main__":
     normal_out = str(Path(base_path) / config['dataset']['benign_out'])
     malicious_out = str(Path(base_path) / config['dataset']['malicious_out'])
     VOCAB_DIR = str(Path(base_path) / config['dataset']['vocab_dir'])
+
+    # 从配置中读取 call_graph 文件名（默认为 call_graph.json）
+    call_graph_filename = config['dataset'].get('call_graph_filename', 'call_graph.json')
 
     # 从配置中读取时间范围
     cl_config = config.get('continual_learning', {})
@@ -236,7 +247,12 @@ if __name__ == "__main__":
 
     print("\n[1/3] Building global vocab...")
     vocab_start = time.time()
-    name2idx, type2idx, edge_type2idx, behavior2idx = build_global_vocab([normal_root, malicious_root], start_month=vocab_start_month, end_month=vocab_end_month)
+    name2idx, type2idx, edge_type2idx, behavior2idx = build_global_vocab(
+        [normal_root, malicious_root],
+        start_month=vocab_start_month,
+        end_month=vocab_end_month,
+        call_graph_filename=call_graph_filename
+    )
     vocab_time = time.time() - vocab_start
     print(f"  build_global_vocab completed in {vocab_time:.2f}s")
     os.makedirs(VOCAB_DIR, exist_ok=True)
@@ -262,7 +278,8 @@ if __name__ == "__main__":
         behavior2idx=behavior2idx,
         fixed_label=0,
         start_month=data_start_month,
-        end_month=data_end_month
+        end_month=data_end_month,
+        call_graph_filename=call_graph_filename
     )
     benign_time = time.time() - benign_start
     print(f"  CallGraphDatasetFull_Lazy (benign) completed in {benign_time:.2f}s")
@@ -278,7 +295,8 @@ if __name__ == "__main__":
         behavior2idx=behavior2idx,
         fixed_label=1,
         start_month=data_start_month,
-        end_month=data_end_month
+        end_month=data_end_month,
+        call_graph_filename=call_graph_filename
     )
     malicious_time = time.time() - malicious_start
     print(f"  CallGraphDatasetFull_Lazy (malicious) completed in {malicious_time:.2f}s")

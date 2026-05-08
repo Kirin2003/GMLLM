@@ -60,7 +60,7 @@ def extract_qwen_results_to_csv(dataset_base: str, output_csv: str, json_filenam
 
 if __name__ == "__main__":
     dataset_base = "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset"
-    model_name = "deepseek"
+    model_name = "llama2"
     if model_name == "qwen3_5_27b":
         output_csv = "/Data2/hxq/GMLLM/results/direct_call_llm_local.csv"
         json_filename = "qwen3_5_27b.json"

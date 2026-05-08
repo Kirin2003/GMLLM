@@ -1,0 +1,214 @@
+{
+  "behaviors": [
+    {
+      "name": "network_communication",
+      "why": "Network communication can expose sensitive data or allow unauthorized access.",
+      "rule": "lambda n: n.startswith(('socket.', 'requests.', 'urllib.', 'httpx.', 'aiohttp.', 'ftplib.'))"
+    },
+    {
+      "name": "network_data_reception",
+      "why": "Receiving data over the network can expose sensitive data or allow unauthorized access.",
+      "rule": "lambda n: n.endswith(('.recv', '.recvfrom', '.read'))"
+    },
+    {
+      "name": "dns_activity",
+      "why": "DNS activity can be used to exfiltrate data or perform reconnaissance.",
+      "rule": "lambda n: n.startswith(('socket.gethostbyname', 'socket.getaddrinfo'))"
+    },
+    {
+      "name": "data_exfil_http",
+      "why": "Exfiltrating data over HTTP can expose sensitive data.",
+      "rule": "lambda n: n.startswith(('requests.post', 'requests.put', 'requests.patch', 'requests.delete'))"
+    },
+    {
+      "name": "data_exfil_socket",
+      "why": "Exfiltrating data over a socket can expose sensitive data.",
+      "rule": "lambda n: n.startswith(('socket.send', 'socket.sendto'))"
+    },
+    {
+      "name": "data_exfil_scp",
+      "why": "Exfiltrating data over SCP can expose sensitive data.",
+      "rule": "lambda n: n.startswith(('paramiko.scp'))"
+    },
+    {
+      "name": "data_exfil_webhook",
+      "why": "Exfiltrating data over a webhook can expose sensitive data.",
+      "rule": "lambda n: n.startswith(('requests.post', 'requests.put', 'requests.patch', 'requests.delete'))"
+    },
+    {
+      "name": "data_collection_stdin",
+      "why": "Collecting data from standard input can expose sensitive data.",
+      "rule": "lambda n: n.startswith(('input', 'sys.stdin.read'))"
+    },
+    {
+      "name": "lateral_movement_ssh",
+      "why": "Using SSH for lateral movement can expose sensitive data or allow unauthorized access.",
+      "rule": "lambda n: n.startswith(('paramiko.client.connect'))"
+    },
+    {
+      "name": "self_propagation_scp",
+      "why": "Using SCP for self-propagation can expose sensitive data or allow unauthorized access.",
+      "rule": "lambda n: n.startswith(('paramiko.scp'))"
+    },
+    {
+      "name": "fs_read",
+      "why": "Reading files can expose sensitive data.",
+      "rule": "lambda n: n.startswith(('open', 'os.read', 'os.lseek'))"
+    },
+    {
+      "name": "fs_write",
+      "why": "Writing to files can expose sensitive data or allow unauthorized access.",
+      "rule": "lambda n: n.startswith(('open', 'os.write', 'os.lseek'))"
+    },
+    {
+      "name": "payload_dumping",
+      "why": "Dumping payloads can expose sensitive data or allow unauthorized access.",
+      "rule": "lambda n: n.startswith(('pickle.dump', 'json.dump', 'yaml.dump'))"
+    },
+    {
+      "name": "fs_enum",
+      "why": "Enumerating the file system can expose sensitive data or allow unauthorized access.",
+      "rule": "lambda n: n.startswith(('os.listdir', 'os.walk'))"
+    },
+    {
+      "name": "credential_access_bruteforce",
+      "why": "Brute-forcing credentials can expose sensitive data or allow unauthorized access.",
+      "rule": "lambda n: n.startswith(('requests.post', 'requests.put', 'requests.patch', 'requests.delete'))"
+    },
+    {
+      "name": "credential_access",
+      "why": "Accessing credentials can expose sensitive data or allow unauthorized access.",
+      "rule": "lambda n: n.startswith(('requests.post', 'requests.put', 'requests.patch', 'requests.delete'))"
+    },
+    {
+      "name": "command_execution",
+      "why": "Executing commands can expose sensitive data or allow unauthorized access.",
+      "rule": "lambda n: any(x in n for x in ('eval', 'exec', 'os.system', 'subprocess.run'))"
+    },
+    {
+      "name": "dynamic_code_exec",
+      "why": "Executing dynamic code can expose sensitive data or allow unauthorized access.",
+      "rule": "lambda n: any(x in n for x in ('eval', 'exec'))"
+    },
+    {
+      "name": "dynamic_code_load",
+      "why": "Loading dynamic code can expose sensitive data or allow unauthorized access.",
+      "rule": "lambda n: any(x in n for x in ('importlib.import_module', 'imp.load_source'))"
+    },
+    {
+      "name": "network",
+      "why": "Access to network resources can expose sensitive data or allow for unauthorized access.",
+      "rule": "lambda n: n.startswith(('socket.', 'requests.', 'urllib.', 'httpx.', 'aiohttp.', 'ftplib.'))"
+    },
+    {
+      "name": "network_data_reception",
+      "why": "Receiving data over the network can expose sensitive data or allow for unauthorized access.",
+      "rule": "lambda n: n.endswith(('.recv', '.recvfrom', '.read'))"
+    },
+    {
+      "name": "exec_eval",
+      "why": "Executing arbitrary code can lead to security vulnerabilities and data breaches.",
+      "rule": "lambda n: any(x in n for x in ('eval', 'exec', 'os.system', 'subprocess.run'))"
+    },
+    {
+      "name": "file_access",
+      "why": "Access to file resources can expose sensitive data or allow for unauthorized access.",
+      "rule": "lambda n: n.startswith(('open', 'os.open', 'shutil.copy'))"
+    },
+    {
+      "name": "environment_variables",
+      "why": "Access to environment variables can expose sensitive data or allow for unauthorized access.",
+      "rule": "lambda n: n.startswith(('os.environ', 'subprocess.run'))"
+    },
+    {
+      "name": "reflection_abuse",
+      "why": "Abuse of reflection can lead to security vulnerabilities and data breaches.",
+      "rule": "lambda n: any(x in n for x in ('__import__', 'inspect.getsource', 'inspect.getmodule'))"
+    },
+    {
+      "name": "crypto_activity",
+      "why": "Cryptographic activity can be used to hide sensitive data or to perform unauthorized actions.",
+      "rule": "lambda n: any(x in n for x in ('cryptography.', 'hashlib.', 'secrets.', 'os.urandom'))"
+    },
+    {
+      "name": "deobfuscation",
+      "why": "Deobfuscation can be used to reverse engineer code and expose sensitive data or logic.",
+      "rule": "lambda n: any(x in n for x in ('ast.', 'dis.', 'inspect.getsource'))"
+    },
+    {
+      "name": "obfuscation_dynamic_config",
+      "why": "Dynamic configuration of obfuscation can be used to hide sensitive data or logic.",
+      "rule": "lambda n: any(x in n for x in ('ast.', 'dis.', 'inspect.getsource'))"
+    },
+    {
+      "name": "system_recon",
+      "why": "System reconnaissance can be used to gather information about the system and its vulnerabilities.",
+      "rule": "lambda n: any(x in n for x in ('os.uname', 'platform.', 'socket.gethostname'))"
+    },
+    {
+      "name": "process_recon",
+      "why": "Process reconnaissance can be used to gather information about running processes and their vulnerabilities.",
+      "rule": "lambda n: any(x in n for x in ('psutil.', 'subprocess.run'))"
+    },
+    {
+      "name": "permission_manipulation",
+      "why": "Permission manipulation can be used to gain unauthorized access to resources.",
+      "rule": "lambda n: any(x in n for x in ('os.chmod', 'os.chown', 'os.setuid', 'os.setgid'))"
+    },
+    {
+      "name": "defense_evasion_daemon",
+      "why": "Defense evasion through the use of daemons can be used to hide malicious activity.",
+      "rule": "lambda n: any(x in n for x in ('os.fork', 'os.setsid', 'subprocess.Popen'))"
+    },
+    {
+      "name": "defense_evasion",
+      "why": "Defense evasion can be used to hide malicious activity.",
+      "rule": "lambda n: any(x in n for x in ('os.rename', 'os.remove', 'os.unlink'))"
+    },
+    {
+      "name": "defense_evasion_gui",
+      "why": "Defense evasion through the use of GUI can be used to hide malicious activity.",
+      "rule": "lambda n: any(x in n for x in ('tkinter.', 'pyqt.', 'pyside.', 'wxpython.'))"
+    },
+    {
+      "name": "persistence_registry",
+      "why": "Persistence through the use of the registry can be used to maintain access to a system.",
+      "rule": "lambda n: any(x in n for x in ('winreg.', 'ctypes.', 'os.system'))"
+    },
+    {
+      "name": "persistence_cron",
+      "why": "Persistence through the use of cron can be used to maintain access to a system.",
+      "rule": "lambda n: any(x in n for x in ('crontab.', 'schedule.', 'apscheduler.'))"
+    },
+    {
+      "name": "keylogging",
+      "why": "Keylogging can be used to capture sensitive information entered by users.",
+      "rule": "lambda n: any(x in n for x in ('pynput.', 'pykeyboard.', 'pyautogui.'))"
+    },
+    {
+      "name": "user_input_prompt",
+      "why": "Prompting for user input can be used to capture sensitive information entered by users.",
+      "rule": "lambda n: any(x in n for x in ('input', 'raw_input'))"
+    },
+    {
+      "name": "clipboard_abuse",
+      "why": "Abuse of the clipboard can be used to capture sensitive information.",
+      "rule": "lambda n: any(x in n for x in ('pyperclip.', 'win32clipboard.', 'pynput.'))"
+    },
+    {
+      "name": "screenshot",
+      "why": "Taking screenshots can be used to capture sensitive information displayed on the screen.",
+      "rule": "lambda n: any(x in n for x in ('PIL.', 'pyautogui.', 'mss.', 'pygetwindow.'))"
+    },
+    {
+      "name": "gui_abuse",
+      "why": "Abuse of the GUI can be used to capture sensitive information or to perform unauthorized actions.",
+      "rule": "lambda n: any(x in n for x in ('tkinter.', 'pyqt.', 'pyside.', 'wxpython.'))"
+    },
+    {
+      "name": "install_hook",
+      "why": "Installation of hooks can be used to maintain access to a system or to perform unauthorized actions.",
+      "rule": "lambda n: any(x in n for x in ('ctypes.', 'os.system'))"
+    }
+  ]
+}

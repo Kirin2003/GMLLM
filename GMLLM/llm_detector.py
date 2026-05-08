@@ -1,7 +1,7 @@
 from __future__ import annotations
 import json, os, re, time
 from pathlib import Path
-from prompts import PROMPT_DATA, PROMPT_COMM
+from prompts import PROMPT_DATA, PROMPT_COMM, PROMPT_COMM_SHORT
 from typing import Dict, List, Optional
 from rules_fallback import BEHAVIOR_RULES, KNOWN_LIBS, BUILTIN_DECOS
 from llm_client import get_llm_client
@@ -17,6 +17,8 @@ class LLMBehaviorDetector:
         temperature: float = 0.0,
         max_retries: int = 3,
         timeout_s: float = 120.0,
+        api_key: str = "",
+        base_url: str = "",
     ):
         self.model_name = model_name
         self.provider = provider
@@ -32,7 +34,7 @@ class LLMBehaviorDetector:
                 self.cache = json.loads(self.cache_path.read_text(encoding="utf-8"))
             except Exception:
                 self.cache = {}
-        self._openai_client = get_llm_client(provider, model_name)
+        self._openai_client = get_llm_client(api_key, base_url)
     def detect_behaviors(self, node_info: Dict) -> List[str]:
         key = self._key(node_info)
         if key in self.cache:
@@ -90,7 +92,7 @@ class LLMBehaviorDetector:
             except Exception:
                 pass
         return out
-    def _llm_classify(self, node_info: Dict) -> List[str]:
+    def llm_classify(self, node_info: Dict) -> List[str]:
         sys_prompt = SYS_prompt
         user_prompt = json.dumps({"node_info": node_info, "allowed_labels": ALL_BEHAVIOR_TAGS}, ensure_ascii=False)
         backoff = 1.0
@@ -154,13 +156,13 @@ class LLMBehaviorDetector:
             except Exception:
                 pass
 
+    
+    # 用于模型上下文较长的情况
     def synthesize_rules(self) -> dict:
         if self._openai_client is None:
             raise RuntimeError("LLM client not available (no API key or SDK).")
         user_prompt = json.dumps({"allowed_hint": list(ALL_BEHAVIOR_TAGS)}, ensure_ascii=False)
-        print("chat qwen3-max")
         text = self._chat_once(PROMPT_COMM, user_prompt)
-        print(text)
         try:
             obj = json.loads(text)
             if isinstance(obj, dict) and "behaviors" in obj:
@@ -176,6 +178,46 @@ class LLMBehaviorDetector:
             except Exception:
                 pass
         raise ValueError("Failed to parse synthesized rules JSON.")
+
+
+    # 用于模型上下文较小的情况
+    def synthesize_rules_split(self, n: int = 2) -> dict:
+        if self._openai_client is None:
+            raise RuntimeError("LLM client not available (no API key or SDK).")
+        all_tags = list(ALL_BEHAVIOR_TAGS)
+        chunk_size = max(1, (len(all_tags) + n - 1) // n)
+        chunks = [all_tags[i:i + chunk_size] for i in range(0, len(all_tags), chunk_size)]
+
+        print(f"chat {self.model_name} ({len(chunks)} rounds)")
+        all_texts = []
+        for i, chunk in enumerate(chunks):
+            user_prompt = json.dumps({"allowed_hint": chunk}, ensure_ascii=False)
+            text = self._chat_once(PROMPT_COMM_SHORT, user_prompt)
+            print(f"--- round {i+1}/{len(chunks)} ---")
+            print(text)
+            all_texts.append(text)
+
+        merged_behaviors = []
+        for text in all_texts:
+            obj = None
+            try:
+                obj = json.loads(text)
+                if isinstance(obj, dict) and "behaviors" in obj:
+                    merged_behaviors.extend(obj["behaviors"])
+            except Exception:
+                pass
+            if obj is None or "behaviors" not in obj:
+                m = re.search(r"\{[\s\S]*\}", text)
+                if m:
+                    try:
+                        obj = json.loads(m.group(0))
+                        if isinstance(obj, dict) and "behaviors" in obj:
+                            merged_behaviors.extend(obj["behaviors"])
+                    except Exception:
+                        pass
+        if not merged_behaviors:
+            raise ValueError("Failed to parse synthesized rules JSON.")
+        return {"behaviors": merged_behaviors}
 
     def load_synth_rules(self, path: Path) -> None:
         try:
