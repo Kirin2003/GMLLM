@@ -135,9 +135,11 @@ def batch_extract_call_graphs(detector: LLMBehaviorDetector, base_path: Path | s
 
 
 if __name__ == "__main__":
-    # 读取配置文件
-    config_path = "./configs/default_with_qwen2_5.yaml"
-    config = load_config(config_path)
+    parser = argparse.ArgumentParser(description="批量提取 Call Graph")
+    parser.add_argument("--config", required=True, help="配置文件路径")
+    args = parser.parse_args()
+
+    config = load_config(args.config)
 
     llm_config = config.get("llm", {})
     dataset_config = config.get("dataset", {})
@@ -160,29 +162,29 @@ if __name__ == "__main__":
         api_key=llm_config.get("api_key_env", ""),
         base_url=llm_config.get("base_url", ""),
     )
-    # if synth_rules:
-    #     log.log("正在合成规则...")
-    #     try:
-    #         obj = detector.synthesize_rules_split()
-    #         synth_path.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
+    if synth_rules:
+        log.log("正在合成规则...")
+        try:
+            obj = detector.synthesize_rules_split()
+            synth_path.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    #         log.log(f"[ok] 规则合成成功，保存在 {synth_path}")
-    #     except Exception as e:
-    #         log.log(f"[warn] 规则合成失败，将使用 fallback 规则: {e}")
+            log.log(f"[ok] 规则合成成功，保存在 {synth_path}")
+        except Exception as e:
+            log.log(f"[warn] 规则合成失败，将使用 fallback 规则: {e}")
 
-    log.log("加载规则...")
-    try:
-        detector.load_synth_rules(synth_path)
-        log.log(f"[ok] 规则加载成功: {synth_path}")
-    except Exception as e:
-        log.log(f"[warn] 规则加载失败，将使用 fallback 规则: {e}")
+    # log.log("加载规则...")
+    # try:
+    #     detector.load_synth_rules(synth_path)
+    #     log.log(f"[ok] 规则加载成功: {synth_path}")
+    # except Exception as e:
+    #     log.log(f"[warn] 规则加载失败，将使用 fallback 规则: {e}")
 
-    log.log("处理所有包...")
-    overall_start = time.time()
-    batch_extract_call_graphs(
-        detector=detector,
-        base_path=pkg_path,
-        model_name=model_name,
-    )
-    total_time = time.time() - overall_start
-    log.log(f"Total execution time: {total_time:.1f}s ({total_time/60:.1f}min)")
+    # log.log("处理所有包...")
+    # overall_start = time.time()
+    # batch_extract_call_graphs(
+    #     detector=detector,
+    #     base_path=pkg_path,
+    #     model_name=model_name,
+    # )
+    # total_time = time.time() - overall_start
+    # log.log(f"Total execution time: {total_time:.1f}s ({total_time/60:.1f}min)")

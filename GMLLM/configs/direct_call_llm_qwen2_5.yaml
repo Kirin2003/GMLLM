@@ -14,5 +14,5 @@ llm:
 result_filename: "qwen2_5.json"
 
 # 增量扫描月份范围
-start_month: "2023-03"
+start_month: "2022-01"
 end_month: "2024-12"

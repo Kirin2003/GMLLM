@@ -5,17 +5,17 @@ llm:
   base_url: "http://192.168.1.101:60102/v1"
   context_length: 4096
   synth_rules: true
-  synth_rules_path: "./synth_rules.json"
 
 # 数据集配置
 dataset:
   name: "incremental_packages_dynamic_capping_subset"
   base_path: "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset"
-  vocab_dir: "vocab"
+  vocab_dir: "vocab_deepseek"
   benign_root: "benign"
   malicious_root: "malicious"
-  benign_out: "benign_call_processed"
-  malicious_out: "malicious_call_processed"
+  benign_out: "benign_call_processed_deepseek"
+  malicious_out: "malicious_call_processed_deepseek"
+  call_graph_filename: "deepseek_call_graph.json"
 
 # 训练配置
 training:
@@ -46,14 +46,14 @@ continual_learning:
 
 # 结果文件配置
 results:
-  future_month: "CL_unk_test_than_train_future_month.json"
+  future_month: "CL_unk_test_than_train_future_month_deepseek.json"
 
 # 路径配置
 paths:
-  models_dir: "./models"
-  results_dir: "../results"
-  pretrained_model: "./models/base_model.pt"
-  prefix: "incremental_unk_model_"
+  models_dir: "./models_deepseek"
+  results_dir: "../results_deepseek"
+  pretrained_model: "./models_deepseek/base_model.pt"
+  prefix: "incremental_unk_model_deepseek_"
 
 # 设备配置 (auto/cuda/cpu)
 device: "auto"

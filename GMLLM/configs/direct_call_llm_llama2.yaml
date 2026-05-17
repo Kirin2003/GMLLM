@@ -14,5 +14,5 @@ llm:
 result_filename: "llama2.json"
 
 # 增量扫描月份范围
-start_month: "2023-08"
+start_month: "2022-02"
 end_month: "2024-12"
