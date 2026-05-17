@@ -85,23 +85,13 @@ def calculate_metrics(input_csv: str, output_json: str):
 
 
 if __name__ == "__main__":
-    # qwen 3_5_27b results
-    calculate_metrics(
-        '/Data2/hxq/GMLLM/results/direct_call_llm_local.csv',
-        '/Data2/hxq/GMLLM/results/direct_call_llm_local.json'
-    )
-    # qwen2_5 results
-    calculate_metrics(
-        '/Data2/hxq/GMLLM/results/direct_call_llm_local_qwen2_5.csv',
-        '/Data2/hxq/GMLLM/results/direct_call_llm_local_qwen2_5.json'
-    )
-    # deepseek results
-    calculate_metrics(
-        '/Data2/hxq/GMLLM/results/direct_call_llm_local_deepseek.csv',
-        '/Data2/hxq/GMLLM/results/direct_call_llm_local_deepseek.json'
-    )
-    # llama2 results
-    calculate_metrics(
-        '/Data2/hxq/GMLLM/results/direct_call_llm_local_llama2.csv',
-        '/Data2/hxq/GMLLM/results/direct_call_llm_local_llama2.json'
-    )
+    import argparse
+    parser = argparse.ArgumentParser(description="计算LLM检测结果的precision/recall/f1指标")
+    parser.add_argument('--model', '-m', type=str, required=True,
+                        choices=['qwen3_5_27b', 'qwen2_5', 'deepseek', 'llama2'],
+                        help='模型名称')
+    args = parser.parse_args()
+
+    input_csv = f"/Data2/hxq/GMLLM/results/direct_call_llm_local_{args.model}.csv"
+    output_json = f"/Data2/hxq/GMLLM/results/direct_call_llm_local_{args.model}.json"
+    calculate_metrics(input_csv, output_json)
