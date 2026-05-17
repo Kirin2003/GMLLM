@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 # 将上级目录加入 Python 搜索路径
-sys.path.insert(0, '/Data2/hxq/GMLLM')
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import os
 import json

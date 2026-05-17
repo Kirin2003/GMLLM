@@ -6,9 +6,7 @@ import os
 from pathlib import Path
 from datetime import datetime
 
-
-# 默认日志目录
-LOG_DIR = Path("/Data2/hxq/GMLLM/log")
+from .paths import LOG_DIR
 
 
 class Logger:

@@ -12,7 +12,7 @@ from typing import Optional, Dict, Tuple, List
 from llm_client import get_llm_client
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import sys
-sys.path.insert(0, "/Data2/hxq/GMLLM")  # 添加项目根目录到 Python 路径
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # 添加项目根目录到 Python 路径
 
 from utils.logger_utils import Logger
 from utils.month_utils import generate_month_range

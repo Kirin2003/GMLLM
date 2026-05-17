@@ -1,8 +1,9 @@
 import sys
+import argparse
 from pathlib import Path
 
 # 将上级目录加入 Python 搜索路径
-sys.path.insert(0, '/Data2/hxq/GMLLM')
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import os
 import json
@@ -314,8 +315,14 @@ def run_base_model(
 # =============================================================================
 
 if __name__ == "__main__":
+    # 解析命令行参数
+    parser = argparse.ArgumentParser(description="Train and test GCN model for malicious API detection")
+    parser.add_argument("--config", type=str, default="./configs/default.yaml",
+                        help="Path to config file (default: ./configs/default.yaml)")
+    args = parser.parse_args()
+
     # 加载配置文件
-    config_path = "./configs/default.yaml"
+    config_path = args.config
     config = load_config(config_path)
 
     # 数据集路径
@@ -350,7 +357,7 @@ if __name__ == "__main__":
 
     # 结果文件配置
     results_config = config.get('results', {})
-    base_model_result_file = results_config.get('base_model', 'test_than_train_future_test_results.json')
+    base_model_result_file = results_config.get('future_month', 'test_than_train_future_test_results.json')
 
     # 运行训练和测试
     run_base_model(
