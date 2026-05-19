@@ -116,6 +116,11 @@ class LLMBehaviorDetector:
             raise last_err
         return []
     def _chat_once(self, system_prompt: str, user_prompt: str) -> str:
+        # 使用 httpx 超时设置，兼容 vLLM 等本地部署
+        # vLLM 本地部署生成较慢，需要更长超时
+        import httpx
+        timeout_config = httpx.Timeout(self.timeout_s, connect=60.0, read=self.timeout_s, write=60.0, pool=60.0)
+        print(f"[DEBUG] Sending request to {self.model_name} (timeout={self.timeout_s}s)...")
         resp = self._openai_client.chat.completions.create(
             model=self.model_name,
             messages=[
@@ -123,8 +128,10 @@ class LLMBehaviorDetector:
                 {"role": "user", "content": user_prompt},
             ],
             temperature=self.temperature,
-            timeout=self.timeout_s,
+            stream=False,
+            timeout=timeout_config,
         )
+        print(f"[DEBUG] Got response, length={len(resp.choices[0].message.content or '')}")
         return resp.choices[0].message.content or ""
     def _normalize_labels(self, labels: List[str]) -> List[str]:
         uniq = {lb for lb in labels if lb in ALL_BEHAVIOR_TAGS}
@@ -181,7 +188,7 @@ class LLMBehaviorDetector:
 
 
     # 用于模型上下文较小的情况
-    def synthesize_rules_split(self, n: int = 2) -> dict:
+    def synthesize_rules_split(self, n: int = 3) -> dict:
         if self._openai_client is None:
             raise RuntimeError("LLM client not available (no API key or SDK).")
         all_tags = list(ALL_BEHAVIOR_TAGS)
@@ -192,6 +199,8 @@ class LLMBehaviorDetector:
         all_texts = []
         for i, chunk in enumerate(chunks):
             user_prompt = json.dumps({"allowed_hint": chunk}, ensure_ascii=False)
+            print(PROMPT_COMM_SHORT)
+            print(user_prompt)
             text = self._chat_once(PROMPT_COMM_SHORT, user_prompt)
             print(f"--- round {i+1}/{len(chunks)} ---")
             print(text)

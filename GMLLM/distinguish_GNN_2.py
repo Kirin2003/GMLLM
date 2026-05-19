@@ -157,7 +157,8 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, device,
     return model, best_val_f1
 
 
-def test_model(model, test_datasets: dict, batch_size: int, device) -> dict:
+def test_model(model, test_datasets: dict, batch_size: int, device, test_start_month: str) -> dict:
+    log.log("test_start_month: {test_start_month}")
     """按月测试模型"""
     test_loaders = build_dataloaders(test_datasets, batch_size, shuffle=False)
 
@@ -167,7 +168,7 @@ def test_model(model, test_datasets: dict, batch_size: int, device) -> dict:
 
     log.log("\n=== Test Results ===")
     for month in sorted(test_loaders.keys()):
-        if month > '2023-02':
+        if month >= test_start_month:
             test_loader = test_loaders[month]
             metrics = validate(model, test_loader, device)
             f1, acc, malicious_recall, malicious_precision = metrics
@@ -261,6 +262,7 @@ def run_base_model(
 
     log.log(f"Train samples: {len(train_dataset)}")
     log.log(f"Val samples: {len(val_dataset)}")
+    log.log(f"train_months: {train_months}")
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
@@ -296,7 +298,8 @@ def run_base_model(
         model=model,
         test_datasets=test_datasets,
         batch_size=batch_size,
-        device=device
+        device=device,
+        test_start_month=inc_start
     )
 
     # 保存结果

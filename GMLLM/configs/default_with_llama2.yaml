@@ -2,14 +2,14 @@
 llm:
   model_name: "llama-2"
   api_key_env: "123"
-  base_url: "http://192.168.1.101:60101/v1"
+  base_url: "http://192.168.1.101:60103/v1"
   context_length: 4096
   synth_rules: true
 
 # 数据集配置
 dataset:
   name: "incremental_packages_dynamic_capping_subset"
-  base_path: "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset"
+  base_path: "/Data1/hxq/datasets/incremental_packages_dynamic_capping_subset"
   vocab_dir: "vocab_llama2"
   benign_root: "benign"
   malicious_root: "malicious"

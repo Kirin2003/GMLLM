@@ -161,6 +161,7 @@ if __name__ == "__main__":
         use_rule_fallback=True,
         api_key=llm_config.get("api_key_env", ""),
         base_url=llm_config.get("base_url", ""),
+        timeout_s=300
     )
     if synth_rules:
         log.log("正在合成规则...")

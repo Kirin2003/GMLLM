@@ -1,21 +1,21 @@
 # LLM 配置
 llm:
-  model_name: "deepseek"
+  model_name: "llama-3"
   api_key_env: "123"
-  base_url: "http://192.168.1.101:60102/v1"
-  context_length: 4096
+  base_url: "http://192.168.1.101:60103/v1"
+  context_length: 8192
   synth_rules: true
 
 # 数据集配置
 dataset:
   name: "incremental_packages_dynamic_capping_subset"
   base_path: "/Data1/hxq/datasets/incremental_packages_dynamic_capping_subset"
-  vocab_dir: "vocab_deepseek"
+  vocab_dir: "vocab_llama3"
   benign_root: "benign"
   malicious_root: "malicious"
-  benign_out: "benign_call_processed_deepseek"
-  malicious_out: "malicious_call_processed_deepseek"
-  call_graph_filename: "deepseek_call_graph.json"
+  benign_out: "benign_call_processed_llama3"
+  malicious_out: "malicious_call_processed_llama3"
+  call_graph_filename: "qwen-2.5-coder-32b_call_graph.json"
 
 # 训练配置
 training:
@@ -46,14 +46,14 @@ continual_learning:
 
 # 结果文件配置
 results:
-  future_month: "CL_unk_test_than_train_future_month_deepseek.json"
+  future_month: "CL_unk_test_than_train_future_month_llama3.json"
 
 # 路径配置
 paths:
-  models_dir: "./models_deepseek"
-  results_dir: "../results_deepseek"
-  pretrained_model: "./models_deepseek/base_model.pt"
-  prefix: "incremental_unk_model_deepseek_"
+  models_dir: "./models_llama3"
+  results_dir: "../results_llama3"
+  pretrained_model: "./models_llama3/base_model.pt"
+  prefix: "incremental_unk_model_llama3_"
 
 # 设备配置 (auto/cuda/cpu)
 device: "auto"
