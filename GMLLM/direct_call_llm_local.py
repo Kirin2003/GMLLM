@@ -92,16 +92,15 @@ def query_llm_for_verdict(source_code: str) -> Tuple[Optional[str], Optional[dic
     """
     global logger, LLM_CONFIG, LLM_MODEL
 
-    system_prompt = """You are a PyPI package security auditor.
-        You have been provided with the code of a PyPI package script.
-        Please carefully analyze the possible malicious behaviors therein and answer the following:
-        Is this code indicative of potential malicious activity? (Respond only with 'Malicious' or 'Benign')
-        Provide your reasoning. Keep it as simple as possible.
-        Response Format (must be in separate lines, use this exact format):
-        Verdict: <Malicious or Benign>
-        Reasoning: <filename> + <malicious code/function> + <malicious behavior>
-        Example: Reasoning: __init__.py + os.system() + execute remote commands
-        """
+    system_prompt = """You are a PyPI package security auditor. Analyze the provided PyPI package code for malicious behaviors. Respond ONLY with a valid JSON object in this exact format:
+{"verdict": "Malicious" or "Benign", "reasoning": "<filename> + <malicious code/function> + <malicious behavior>"}
+
+Examples:
+{"verdict": "Malicious", "reasoning": "__init__.py + os.system() + execute remote commands"}
+{"verdict": "Benign", "reasoning": "no malicious behavior found"}
+
+Do not output anything before or after the JSON. Your response must be parseable by json.loads().
+"""
 
     api_key = LLM_CONFIG["api_key_env"]
     base_url = LLM_CONFIG["base_url"]
@@ -155,6 +154,30 @@ def parse_llm_response(response_text: str) -> Dict[str, str]:
     Returns:
         包含 verdict 和 reasoning 的字典
     """
+    # 尝试直接解析 JSON
+    try:
+        data = json.loads(response_text.strip())
+        return {
+            "verdict": data.get("verdict", "").strip(),
+            "reasoning": data.get("reasoning", "").strip()
+        }
+    except json.JSONDecodeError:
+        pass
+
+    # 尝试从文本中提取 JSON（处理模型可能在 JSON 前后加了额外文本的情况）
+    import re
+    json_match = re.search(r'\{[^{}]*"verdict"[^{}]*"reasoning"[^{}]*\}', response_text, re.DOTALL)
+    if json_match:
+        try:
+            data = json.loads(json_match.group())
+            return {
+                "verdict": data.get("verdict", "").strip(),
+                "reasoning": data.get("reasoning", "").strip()
+            }
+        except json.JSONDecodeError:
+            pass
+
+    # Fallback: 旧格式解析（兼容）
     try:
         lines = response_text.strip().split('\n')
         verdict = lines[0].replace("Verdict:", "").strip()
@@ -164,7 +187,7 @@ def parse_llm_response(response_text: str) -> Dict[str, str]:
         reasoning = ""
 
     return {
-        "verdict": verdict,
+        "verdict": verdict or "",
         "reasoning": reasoning or ""
     }
 
