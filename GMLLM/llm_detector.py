@@ -16,7 +16,7 @@ class LLMBehaviorDetector:
         cache_path: Optional[Path] = None,
         temperature: float = 0.0,
         max_retries: int = 3,
-        timeout_s: float = 120.0,
+        timeout_s: float = 600.0,
         api_key: str = "",
         base_url: str = "",
     ):

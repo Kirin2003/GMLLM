@@ -24,6 +24,7 @@ Output format (STRICT JSON):
     ...
   ]
 }
+Return ONLY the JSON object. No markdown, no commentary.
 """
 
 PROMPT_COMM = """You are an AI model designed to identify and analyze sensitive behaviors in Python programming code.

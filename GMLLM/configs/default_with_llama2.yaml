@@ -2,7 +2,7 @@
 llm:
   model_name: "llama-2"
   api_key_env: "123"
-  base_url: "http://192.168.1.101:60101/v1"
+  base_url: "http://192.168.1.101:60103/v1"
   context_length: 4096
   synth_rules: true
 

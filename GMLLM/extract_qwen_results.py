@@ -34,7 +34,10 @@ def extract_qwen_results_to_csv(dataset_base: str, output_csv: str, json_filenam
                     "package_name": data.get("package_name", ""),
                     "month": data.get("month", month),  # 优先用json中的month
                     "verdict": data.get("verdict", ""),
-                    "package_type": data.get("package_type", package_type)  # 优先用json中的package_type
+                    "package_type": data.get("package_type", package_type),  # 优先用json中的package_type
+                    "prompt_tokens": data.get("prompt_tokens", ""),
+                    "completion_tokens": data.get("completion_tokens", ""),
+                    "total_tokens": data.get("total_tokens", "")
                 })
         except Exception as e:
             print(f"Error processing {json_path}: {e}")
@@ -51,7 +54,8 @@ def extract_qwen_results_to_csv(dataset_base: str, output_csv: str, json_filenam
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(output_path, 'w', newline='', encoding='utf-8') as f:
-        writer = csv.DictWriter(f, fieldnames=["package_name", "month", "verdict", "package_type"])
+        writer = csv.DictWriter(f, fieldnames=["package_name", "month", "verdict", "package_type",
+                                                "prompt_tokens", "completion_tokens", "total_tokens"])
         writer.writeheader()
         writer.writerows(results)
 

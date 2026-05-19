@@ -1,0 +1,199 @@
+{
+  "behaviors": [
+    {
+      "name": "network",
+      "why": "Communication with external systems or networks can expose sensitive information or provide a vector for attackers to gain access to the system.",
+      "rule": "lambda n: n.startswith(('socket.', 'requests.', 'urllib.', 'httpx.', 'aiohttp.', 'ftplib.')"
+    },
+    {
+      "name": "network_data_reception",
+      "why": "Receiving network data can indicate the presence of a data exfiltration or command and control mechanism.",
+      "rule": "lambda n: n.endswith(('.recv', '.recvfrom', '.read'))"
+    },
+    {
+      "name": "exec_eval",
+      "why": "Executing or evaluating code can allow attackers to inject and execute malicious payloads, potentially leading to a full system compromise.",
+      "rule": "lambda n: any(x in n for x in ('eval', 'exec', 'os.system', 'subprocess.run'))"
+    },
+    {
+      "name": "dns_activity",
+      "why": "DNS activity can reveal sensitive information about the system's infrastructure and communication patterns.",
+      "rule": "lambda n: any(x in n for x in ('dns', 'socket.gethostbyname', 'socket.getfqdn'))"
+    },
+    {
+      "name": "data_exfil_http",
+      "why": "Sending or receiving HTTP data can indicate the presence of a data exfiltration mechanism.",
+      "rule": "lambda n: any(x in n for x in ('http', 'https', 'http.client', 'http.server'))"
+    },
+    {
+      "name": "data_exfil_socket",
+      "why": "Using sockets to send or receive data can indicate the presence of a data exfiltration mechanism.",
+      "rule": "lambda n: any(x in n for x in ('socket', 'socket.', 'socket.accept', 'socket.connect'))"
+    },
+    {
+      "name": "data_exfil_scp",
+      "why": "Using SCP to transfer data can indicate the presence of a data exfiltration mechanism.",
+      "rule": "lambda n: any(x in n for x in ('scp', 'ssh', 'ssh.', 'subprocess.run'))"
+    },
+    {
+      "name": "data_exfil_webhook",
+      "why": "Using webhooks to transfer data can indicate the presence of a data exfiltration mechanism.",
+      "rule": "lambda n: any(x in n for x in ('webhook', 'http', 'https', 'http.client', 'http.server'))"
+    },
+    {
+      "name": "data_collection_stdin",
+      "why": "Reading data from stdin can indicate the presence of a data collection mechanism.",
+      "rule": "lambda n: any(x in n for x in ('stdin', 'subprocess.run'))"
+    },
+    {
+      "name": "lateral_movement_ssh",
+      "why": "Using SSH to move laterally within a network can indicate the presence of an attacker attempting to gain access to sensitive systems or data.",
+      "rule": "lambda n: any(x in n for x in ('ssh', 'subprocess.run'))"
+    },
+    {
+      "name": "self_propagation_scp",
+      "why": "Using SCP to transfer files between systems can indicate the presence of a self-propagating malware or attacker.",
+      "rule": "lambda n: any(x in n for x in ('scp', 'ssh', 'subprocess.run'))"
+    },
+    {
+      "name": "fs_read",
+      "why": "Reading files from the file system can indicate the presence of a data exfiltration or command and control mechanism.",
+      "rule": "lambda n: any(x in n for x in ('os.listdir', 'os.path.exists', 'os.path.join', 'open', 'read'))"
+    },
+    {
+      "name": "fs_write",
+      "why": "Writing files to the file system can indicate the presence of a data exfiltration or command and control mechanism.",
+      "rule": "lambda n: any(x in n for x in ('os.listdir', 'os.path.exists', 'os.path.join', 'open', 'write'))"
+    },
+    {
+      "name": "payload_dumping",
+      "why": "Dumping payloads to the file system can indicate the presence of a data exfiltration or command and control mechanism.",
+      "rule": "lambda n: any(x in n for x in ('os.listdir', 'os.path.exists', 'os.path.join', 'open', 'write'))"
+    },
+    {
+      "name": "fs_enum",
+      "why": "Enumerating files and directories can indicate the presence of a data exfiltration or command and control mechanism.",
+      "rule": "lambda n: any(x in n for x in ('os.listdir', 'os.path.exists', 'os.path.join'))"
+    },
+    {
+      "name": "credential_access_bruteforce",
+      "why": "Brute-forcing credential access can indicate the presence of an attacker attempting to gain unauthorized access to the system.",
+      "rule": "lambda n: any(x in n for x in ('os.path.expanduser', 'subprocess.run'))"
+    },
+    {
+      "name": "credential_access",
+      "why": "Accessing credentials can indicate the presence of an attacker attempting to gain unauthorized access to the system.",
+      "rule": "lambda n: any(x in n for x in ('os.path.expanduser', 'subprocess.run'))"
+    },
+    {
+      "name": "command_execution",
+      "why": "Executing commands can allow attackers to inject and execute malicious payloads, potentially leading to a full system compromise.",
+      "rule": "lambda n: any(x in n for x in ('subprocess.run', 'os.system'))"
+    },
+    {
+      "name": "dynamic_code_exec",
+      "why": "Executing dynamic code can allow attackers to inject and execute malicious payloads, potentially leading to a full system compromise.",
+      "rule": "lambda n: any(x in n for x in ('exec', 'eval', 'os.system', 'subprocess.run'))"
+    },
+    {
+      "name": "dynamic_code_load",
+      "why": "Loading dynamic code can allow attackers to inject and execute malicious payloads, potentially leading to a full system compromise.",
+      "rule": "lambda n: any(x in n for x in ('exec', 'eval', 'os.system', 'subprocess.run'))"
+    },
+    {
+      "name": "network",
+      "why": "Actions that communicate with the network can potentially expose sensitive information or be exploited for malicious purposes.",
+      "rule": "lambda n: n.startswith(('socket.', 'requests.', 'urllib.', 'httpx.', 'aiohttp.', 'ftplib.')"
+    },
+    {
+      "name": "network_data_reception",
+      "why": "Functions that receive network data can potentially be used to exfiltrate sensitive information or inject malware.",
+      "rule": "lambda n: n.endswith(('.recv', '.recvfrom', '.read'))"
+    },
+    {
+      "name": "exec_eval",
+      "why": "Functions that execute or evaluate code can potentially be used to inject malware or execute arbitrary commands.",
+      "rule": "lambda n: any(x in n for x in ('eval', 'exec', 'os.system', 'subprocess.run'))"
+    },
+    {
+      "name": "crypto_activity",
+      "why": "Functions that perform cryptographic operations can potentially be used to conceal malicious activity or exfiltrate sensitive information.",
+      "rule": "lambda n: any(x in n for x in ('hashlib', 'base64', 'cryptography', 'openssl'))"
+    },
+    {
+      "name": "deobfuscation",
+      "why": "Functions that deobfuscate or decrypt code can potentially be used to conceal malicious activity or bypass security controls.",
+      "rule": "lambda n: any(x in n for x in ('json', 'base64', 'zip', 'tar', 'gzip', 'bzip2'))"
+    },
+    {
+      "name": "obfuscation_dynamic_config",
+      "why": "Functions that dynamically configure obfuscation can potentially be used to conceal malicious activity or evade detection.",
+      "rule": "lambda n: any(x in n for x in ('config', 'settings', 'options', 'parameters'))"
+    },
+    {
+      "name": "system_recon",
+      "why": "Functions that perform system reconnaissance can potentially be used to gather information about the target system for malicious purposes.",
+      "rule": "lambda n: any(x in n for x in ('os', 'subprocess', 'psutil', 'platform', 'socket'))"
+    },
+    {
+      "name": "process_recon",
+      "why": "Functions that perform process reconnaissance can potentially be used to gather information about running processes for malicious purposes.",
+      "rule": "lambda n: any(x in n for x in ('psutil', 'subprocess', 'os', 'process'))"
+    },
+    {
+      "name": "permission_manipulation",
+      "why": "Functions that manipulate permissions can potentially be used to escalate privileges or bypass security controls.",
+      "rule": "lambda n: any(x in n for x in ('os', 'subprocess', 'psutil', 'platform'))"
+    },
+    {
+      "name": "defense_evasion_daemon",
+      "why": "Functions that evade defense mechanisms can potentially be used to bypass security controls and execute malicious code.",
+      "rule": "lambda n: any(x in n for x in ('daemon', 'service', 'systemd', 'init', 'upstart'))"
+    },
+    {
+      "name": "defense_evasion",
+      "why": "Functions that evade defenses can potentially be used to bypass security controls and execute malicious code.",
+      "rule": "lambda n: any(x in n for x in ('evasion', 'bypass', 'security', 'protection'))"
+    },
+    {
+      "name": "defense_evasion_gui",
+      "why": "Functions that evade GUI defenses can potentially be used to bypass security controls and execute malicious code in the GUI.",
+      "rule": "lambda n: any(x in n for x in ('gui', 'window', 'control', 'message', 'event'))"
+    },
+    {
+      "name": "persistence_registry",
+      "why": "Functions that register persistence mechanisms can potentially be used to maintain access to the target system over time.",
+      "rule": "lambda n: any(x in n for x in ('registry', 'settings', 'config', 'options'))"
+    },
+    {
+      "name": "persistence_cron",
+      "why": "Functions that use cron scheduling can potentially be used to execute malicious code at regular intervals.",
+      "rule": "lambda n: any(x in n for x in ('cron', 'schedule', 'timetable', 'alarm'))"
+    },
+    {
+      "name": "keylogging",
+      "why": "Functions that log keyboard input can potentially be used to steal sensitive information such as passwords or encryption keys.",
+      "rule": "lambda n: any(x in n for x in ('keyboard', 'input', 'event', 'message'))"
+    },
+    {
+      "name": "user_input_prompt",
+      "why": "Functions that prompt for user input can potentially be used to steal sensitive information such as passwords or encryption keys.",
+      "rule": "lambda n: any(x in n for x in ('input', 'prompt', 'query', 'ask'))"
+    },
+    {
+      "name": "clipboard_abuse",
+      "why": "Functions that manipulate the clipboard can potentially be used to steal sensitive information such as passwords or encryption keys.",
+      "rule": "lambda n: any(x in n for x in ('clipboard', 'cut', 'copy', 'paste'))"
+    },
+    {
+      "name": "screenshot",
+      "why": "Functions that capture screenshots can potentially be used to steal sensitive information such as passwords or encryption keys.",
+      "rule": "lambda n: any(x in n for x in ('screenshot', 'capture', 'image', 'picture'))"
+    },
+    {
+      "name": "gui_abuse",
+      "why": "Functions that manipulate the GUI can potentially be used to steal sensitive information such as passwords or encryption keys.",
+      "rule": "lambda n: any(x in n for x in ('gui', 'window', 'control', 'message', 'event'))"
+    }
+  ]
+}
