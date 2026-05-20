@@ -1,15 +1,19 @@
 import csv
 import json
 import statistics
+import yaml
 from collections import defaultdict
+from pathlib import Path
 
 
-def calculate_token_stats(input_csv: str, output_json: str):
+def calculate_token_stats(input_csv: str, output_json: str, start_month: str = None, end_month: str = None):
     """Calculate token statistics per month for LLM calls.
 
     Args:
         input_csv: Path to input CSV with columns: month, prompt_tokens, completion_tokens, total_tokens
         output_json: Path to output JSON file
+        start_month: Start month for incremental analysis (format: YYYY-MM)
+        end_month: End month for incremental analysis (format: YYYY-MM)
     """
     # Read CSV
     data = []
@@ -39,6 +43,10 @@ def calculate_token_stats(input_csv: str, output_json: str):
 
     # Calculate stats per month
     months = sorted(monthly.keys())
+
+    # Filter months if incremental range specified
+    if start_month and end_month:
+        months = [m for m in months if start_month <= m <= end_month]
 
     result = {
         "month": months,
@@ -133,8 +141,23 @@ if __name__ == "__main__":
     parser.add_argument('--model', '-m', type=str, required=True,
                         choices=['qwen3_5_27b', 'qwen2_5', 'deepseek', 'llama2'],
                         help='模型名称')
+    parser.add_argument('--continual', '-c', action='store_true',
+                        help='增量模式：从配置文件读取月份范围，只计算该范围内的统计')
     args = parser.parse_args()
 
     input_csv = f"/Data2/hxq/GMLLM/results/direct_call_llm_local_{args.model}.csv"
     output_json = f"/Data2/hxq/GMLLM/results/direct_call_llm_local_{args.model}_token_stats.json"
-    calculate_token_stats(input_csv, output_json)
+
+    start_month = None
+    end_month = None
+
+    if args.continual:
+        # Load config file
+        config_path = Path(__file__).parent / "configs" / f"direct_call_llm_{args.model}.yaml"
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
+        start_month = config.get('incremental_start_month')
+        end_month = config.get('incremental_end_month')
+        print(f"Incremental mode: {start_month} to {end_month}")
+
+    calculate_token_stats(input_csv, output_json, start_month, end_month)
