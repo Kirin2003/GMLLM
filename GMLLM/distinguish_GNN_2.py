@@ -191,6 +191,11 @@ def test_model(model, test_datasets: dict, batch_size: int, device, test_start_m
         log.log(f"Average | F1: {avg_f1:.4f} | Acc: {avg_acc:.4f} | "
                 f"Precision: {avg_prec:.4f} | Recall: {avg_recall:.4f}")
 
+        future_test_results['avg_f1'] = avg_f1
+        future_test_results['avg_acc'] = avg_acc
+        future_test_results['avg_precision'] = avg_prec
+        future_test_results['avg_recall'] = avg_recall
+
     return future_test_results
 
 
@@ -360,7 +365,7 @@ if __name__ == "__main__":
 
     # 结果文件配置
     results_config = config.get('results', {})
-    base_model_result_file = results_config.get('future_month', 'test_than_train_future_test_results.json')
+    base_model_result_file = results_config.get('base_model_result_file', 'base_model_in_future_month_once.json')
 
     # 运行训练和测试
     run_base_model(
