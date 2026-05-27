@@ -401,9 +401,34 @@ def run_continual_learning_unk(
     output_dir = "../results/"
     os.makedirs(output_dir, exist_ok=True)
 
+    # 计算并添加 future_month_result 平均值
+    if future_month_result['f1']:
+        future_month_result['avg_f1'] = sum(future_month_result['f1']) / len(future_month_result['f1'])
+        future_month_result['avg_acc'] = sum(future_month_result['acc']) / len(future_month_result['acc'])
+        future_month_result['avg_precision'] = sum(future_month_result['precision']) / len(future_month_result['precision'])
+        future_month_result['avg_recall'] = sum(future_month_result['recall']) / len(future_month_result['recall'])
+        log.log(f"Future month average: F1={future_month_result['avg_f1']:.4f}, Acc={future_month_result['avg_acc']:.4f}, "
+                f"Precision={future_month_result['avg_precision']:.4f}, Recall={future_month_result['avg_recall']:.4f}")
+
+    # 添加 seed 信息
+    future_month_result['seed'] = seed
+
     future_results_file = output_dir + result_file
     with open(future_results_file, 'w') as f:
         json.dump(future_month_result, f, indent=2)
+    log.log(f"Future month results saved to {future_results_file}")
+
+    # 计算并添加 seen_months_results 平均值
+    if seen_months_results['f1']:
+        seen_months_results['avg_f1'] = sum(seen_months_results['f1']) / len(seen_months_results['f1'])
+        seen_months_results['avg_acc'] = sum(seen_months_results['acc']) / len(seen_months_results['acc'])
+        seen_months_results['avg_precision'] = sum(seen_months_results['precision']) / len(seen_months_results['precision'])
+        seen_months_results['avg_recall'] = sum(seen_months_results['recall']) / len(seen_months_results['recall'])
+        log.log(f"Seen months average: F1={seen_months_results['avg_f1']:.4f}, Acc={seen_months_results['avg_acc']:.4f}, "
+                f"Precision={seen_months_results['avg_precision']:.4f}, Recall={seen_months_results['avg_recall']:.4f}")
+
+    # 添加 seed 信息
+    seen_months_results['seed'] = seed
 
     # 保存已见月份结果
     seen_results_file = output_dir + result_file.replace('future_month', 'seen_month')
@@ -419,6 +444,7 @@ if __name__ == "__main__":
     # ===== 解析命令行参数 =====
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, default='./configs/default.yaml', help='配置文件路径')
+    parser.add_argument('--seed', type=int, default=None, help='随机种子（覆盖配置文件）')
     args = parser.parse_args()
 
     # ===== 加载配置文件 =====
@@ -445,7 +471,7 @@ if __name__ == "__main__":
 
     # 训练参数
     batch_size = config['training']['batch_size']
-    seed = config['training']['seed']
+    seed = args.seed if args.seed is not None else config['training']['seed']
 
     # 设备配置
     device_config = config.get('device', 'auto')

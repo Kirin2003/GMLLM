@@ -47,6 +47,7 @@ continual_learning:
 # 结果文件配置
 results:
   future_month: "CL_unk_test_than_train_future_month_llama3.json"
+  base_model_result_file: "base_model_in_future_month_once_llama3.json"
 
 # 路径配置
 paths:

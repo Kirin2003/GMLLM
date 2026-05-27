@@ -1,0 +1,27 @@
+{
+  "month": [
+    "2024-04"
+  ],
+  "f1": [
+    0.9533678756476685
+  ],
+  "acc": [
+    0.9548872180451128
+  ],
+  "precision": [
+    0.989247311827957
+  ],
+  "recall": [
+    0.92
+  ],
+  "training_time": [
+    13214.23
+  ],
+  "avg_f1": 0.9533678756476685,
+  "avg_acc": 0.9548872180451128,
+  "avg_precision": 0.989247311827957,
+  "avg_recall": 0.92,
+  "avg_training_time": 13214.23,
+  "total_training_time": 13214.23,
+  "config": "./configs/default_with_deepseek.yaml"
+}

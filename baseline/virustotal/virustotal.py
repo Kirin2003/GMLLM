@@ -234,18 +234,22 @@ def get_results_main():
             time.sleep(15.5)
 
 
-def compute_metrics():
-    """Compute precision/recall/f1 for malicious package detection per month.
+def compute_metrics(start_month: str = None, end_month: str = None):
+    """Compute precision/recall/f1/accuracy for malicious package detection per month.
 
     Uses virustotal_benign.csv and virustotal_malicious.csv.
     y_true: label == 'malicious'
     y_pred: verdict in ('MALICIOUS', 'SUSPICIOUS') (positive if any engine flags)
 
+    Args:
+        start_month: Start month (inclusive), e.g. "2023-03". If None, no lower bound.
+        end_month: End month (inclusive), e.g. "2024-12". If None, no upper bound.
+
     Output: JSON saved to ../../results/virustotal.json with format:
-        {"month": [...], "f1": [...], "precision": [...], "recall": [...]}
+        {"month": [...], "f1": [...], "precision": [...], "recall": [...], "accuracy": [...]}
     """
     import json
-    from sklearn.metrics import precision_recall_fscore_support
+    from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 
     benign_csv = "../../results/virustotal_benign.csv"
     malicious_csv = "../../results/virustotal_malicious.csv"
@@ -258,29 +262,28 @@ def compute_metrics():
             for row in reader:
                 rows.append(row)
 
-    # Filter months 2023-03 to 2024-12
-    valid_months = [f"2023-{m:02d}" for m in range(3, 13)] + [f"2024-{m:02d}" for m in range(1, 13)]
-    valid_months_set = set(valid_months)
-
-    filtered_rows = [r for r in rows if r['month'] in valid_months_set]
+    # Filter by month range
+    if start_month is not None:
+        rows = [r for r in rows if r['month'] >= start_month]
+    if end_month is not None:
+        rows = [r for r in rows if r['month'] <= end_month]
 
     # Compute per-month metrics
     from collections import defaultdict
     by_month = defaultdict(list)
-    for row in filtered_rows:
+    for row in rows:
         by_month[row['month']].append(row)
 
     results = []
-    for month in sorted(valid_months):
-        month_rows = by_month.get(month, [])
-        if not month_rows:
-            continue
+    for month in sorted(by_month.keys()):
+        month_rows = by_month[month]
 
         y_true = [1 if r['label'] == 'malicious' else 0 for r in month_rows]
         y_pred = [1 if r['verdict'] in ('MALICIOUS', 'SUSPICIOUS') else 0 for r in month_rows]
 
         p, r, f1, _ = precision_recall_fscore_support(y_true, y_pred, pos_label=1, average='binary', zero_division=0)
-        results.append({'month': month, 'precision': p, 'recall': r, 'f1': f1})
+        acc = accuracy_score(y_true, y_pred)
+        results.append({'month': month, 'precision': p, 'recall': r, 'f1': f1, 'accuracy': acc})
 
     # Save JSON
     output_json = "../../results/virustotal.json"
@@ -288,15 +291,20 @@ def compute_metrics():
         "month": [r['month'] for r in results],
         "f1": [r['f1'] for r in results],
         "precision": [r['precision'] for r in results],
-        "recall": [r['recall'] for r in results]
+        "recall": [r['recall'] for r in results],
+        "accuracy": [r['accuracy'] for r in results],
+        "avg_f1": sum(r['f1'] for r in results) / len(results) if results else 0,
+        "avg_precision": sum(r['precision'] for r in results) / len(results) if results else 0,
+        "avg_recall": sum(r['recall'] for r in results) / len(results) if results else 0,
+        "avg_accuracy": sum(r['accuracy'] for r in results) / len(results) if results else 0
     }
     with open(output_json, "w") as f:
         json.dump(json_data, f, indent=2)
 
-    print(f"{'month':<10} {'precision':>10} {'recall':>10} {'f1':>10}")
-    print("-" * 42)
+    print(f"{'month':<10} {'precision':>10} {'recall':>10} {'f1':>10} {'accuracy':>10}")
+    print("-" * 52)
     for r in results:
-        print(f"{r['month']:<10} {r['precision']:>10.4f} {r['recall']:>10.4f} {r['f1']:>10.4f}")
+        print(f"{r['month']:<10} {r['precision']:>10.4f} {r['recall']:>10.4f} {r['f1']:>10.4f} {r['accuracy']:>10.4f}")
     print(f"\nResults saved to {output_json}")
 
 
@@ -308,7 +316,7 @@ def main():
     # else:
     #     get_results_main()
 
-    compute_metrics()
+    compute_metrics(start_month="2024-01", end_month="2024-12")
 
 
 if __name__ == "__main__":

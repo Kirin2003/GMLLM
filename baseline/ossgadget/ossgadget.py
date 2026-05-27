@@ -255,22 +255,30 @@ def parse_category(json_file: Path) -> str:
         return "error"
 
 
-def compute_metrics(csv_path: str = None):
-    """Compute precision/recall/f1 for malicious package detection per month.
+def compute_metrics(csv_path: str = None, start_month: str = None, end_month: str = None):
+    """Compute precision/recall/f1/accuracy for malicious package detection per month.
 
     Args:
         csv_path: Path to ossgadget_results.csv (default: ../../results/ossgadget_results.csv)
+        start_month: Start month (inclusive), e.g. "2023-01". If None, no lower bound.
+        end_month: End month (inclusive), e.g. "2024-12". If None, no upper bound.
 
     Output: JSON saved to ../../results/ossgadget.json with format:
-        {"month": [...], "f1": [...], "precision": [...], "recall": [...]}
+        {"month": [...], "f1": [...], "precision": [...], "recall": [...], "accuracy": [...]}
     """
     import pandas as pd
-    from sklearn.metrics import precision_recall_fscore_support
+    from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 
     if csv_path is None:
         csv_path = "../../results/ossgadget_results.csv"
 
     df = pd.read_csv(csv_path)
+
+    if start_month is not None:
+        df = df[df['month'] >= start_month]
+    if end_month is not None:
+        df = df[df['month'] <= end_month]
+
     results = []
 
     for month in sorted(df['month'].unique()):
@@ -279,7 +287,8 @@ def compute_metrics(csv_path: str = None):
         y_pred = (month_df['verdict'] == 'malicious').astype(int)
 
         p, r, f1, _ = precision_recall_fscore_support(y_true, y_pred, pos_label=1, average='binary', zero_division=0)
-        results.append({'month': month, 'precision': p, 'recall': r, 'f1': f1})
+        acc = accuracy_score(y_true, y_pred)
+        results.append({'month': month, 'precision': p, 'recall': r, 'f1': f1, 'accuracy': acc})
 
     res_df = pd.DataFrame(results)
 
@@ -289,7 +298,12 @@ def compute_metrics(csv_path: str = None):
         "month": res_df['month'].tolist(),
         "f1": res_df['f1'].tolist(),
         "precision": res_df['precision'].tolist(),
-        "recall": res_df['recall'].tolist()
+        "recall": res_df['recall'].tolist(),
+        "accuracy": res_df['accuracy'].tolist(),
+        "avg_f1": res_df['f1'].mean(),
+        "avg_precision": res_df['precision'].mean(),
+        "avg_recall": res_df['recall'].mean(),
+        "avg_accuracy": res_df['accuracy'].mean()
     }
 
     with open(output_json, "w") as f:
@@ -302,8 +316,8 @@ def compute_metrics(csv_path: str = None):
 
 def main():
     # analyze_batch(HTTP_SERVER_DIR)
-    batch_parse(OUTPUT_BASE_DIR, "2023-03", "2024-12")
-    compute_metrics()
+    # batch_parse(OUTPUT_BASE_DIR, "2023-03", "2024-12")
+    compute_metrics(start_month="2024-01", end_month="2024-12")
 
 
 if __name__ == "__main__":
