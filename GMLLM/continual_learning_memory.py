@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import os
 import json
+import time
 import torch
 import torch.nn as nn
 from pathlib import Path
@@ -311,7 +312,7 @@ def run_continual_learning_unk(
 
     print_memory_stats(memory_samples)
 
-    future_month_result = {'month': [], 'f1': [], 'acc': [], 'precision': [], 'recall': []}
+    future_month_result = {'month': [], 'f1': [], 'acc': [], 'precision': [], 'recall': [], 'train_time': []}
     seen_months_results = {'month': [], 'f1': [], 'acc': [], 'precision': [], 'recall': []}
 
     # 5. 增量学习
@@ -351,6 +352,9 @@ def run_continual_learning_unk(
         # 创建记忆库loader
         memory_loader = create_memory_loader(memory_samples, batch_size) if use_memory else None
 
+        # 记录训练开始时间
+        train_start_time = time.time()
+
         # 训练: 当月数据 + 记忆库
         if use_memory:
             train_month(model, month_train_loader, memory_loader,
@@ -359,6 +363,11 @@ def run_continual_learning_unk(
             log.log(f"Training without memory replay...")
             train_month(model, month_train_loader, None,
                        optimizer, criterion, device, incremental_epochs)
+
+        # 计算当月训练耗时
+        train_elapsed = time.time() - train_start_time
+        log.log(f"  Training time: {train_elapsed:.2f}s")
+        future_month_result['train_time'].append(train_elapsed)
 
         # 保存当月模型
         model_path = f"{model_save_path}{month}.pt"
@@ -407,8 +416,10 @@ def run_continual_learning_unk(
         future_month_result['avg_acc'] = sum(future_month_result['acc']) / len(future_month_result['acc'])
         future_month_result['avg_precision'] = sum(future_month_result['precision']) / len(future_month_result['precision'])
         future_month_result['avg_recall'] = sum(future_month_result['recall']) / len(future_month_result['recall'])
+        future_month_result['avg_train_time'] = sum(future_month_result['train_time']) / len(future_month_result['train_time'])
         log.log(f"Future month average: F1={future_month_result['avg_f1']:.4f}, Acc={future_month_result['avg_acc']:.4f}, "
                 f"Precision={future_month_result['avg_precision']:.4f}, Recall={future_month_result['avg_recall']:.4f}")
+        log.log(f"Average training time per month: {future_month_result['avg_train_time']:.2f}s")
 
     # 添加 seed 信息
     future_month_result['seed'] = seed
