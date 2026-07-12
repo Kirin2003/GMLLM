@@ -1,212 +1,277 @@
-# Supplementary Material for Anonymous Review
+# GMLLM
 
-This repository provides an end-to-end pipeline for detecting sensitive/malicious behavior in Python packages using **static analysis**, **LLM-synthesized ruleset**, **graph construction**, **GNN training**, **GNNExplainer** and **LLM subgraph review**.
+GMLLM 是一个用于检测恶意 PyPI 包的实验性流水线。整体思路是：静态分析 Python 包源码，提取敏感 API 行为规则和调用图，将调用图转换为图特征，用 GNN 进行恶意包分类，再通过带记忆池的增量学习按月更新模型；最后可以选择用 GNN 可解释性方法提取可疑恶意子图，再交给 LLM 进一步判断。
 
-The project is organized as three modules plus a shared `requirements.txt`:
+主要代码位于 `GMLLM/`。当前主流程如下：
 
-> **Privacy/Double-blind note**: All sample configs use `XXXX` placeholders instead of absolute local paths.
+```text
+Python 包源码
+  -> cli_extract.py
+  -> generate_graph_data_fromJson.py
+  -> distinguish_GNN_2.py
+  -> continual_learning_memory.py
+  -> 可选：run_autoexplanation_parallel.py + LLM 复核
+```
 
----
-
-## 0) Environment
+## 环境
 
 ```bash
-python -m venv venv && source venv/bin/activate
+python -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 ```
-The pipeline runs offline. If no API key is present, it automatically falls back to the local rule base.
 
-## 1) Build call_graph.json (extract stage)
-### 1.1 Configure
-Edit `extractAST/extract_config.json` (keep XXXX placeholders or change to your paths):
-```bash
-{
-  "paths": {
-    "src_dir": "XXXX",
-    "out_dir": "XXXX",
-    "synth_rules_out": "synth_rules.json",
-    "cache_file": "detector_cache.json"
-  },
-  "llm": {
-    "provider": "openai\azure\local",
-    "model_name": "Model you want to use",
-    "temperature": 0.0,
-    "max_retries": 3,
-    "timeout_s": 30.0,
-    "auto_synthesize": true
-  },
-  "detector": {
-    "use_rule_fallback": true
-  }
-}
+LLM 调用使用 OpenAI 兼容接口，相关参数写在 `GMLLM/configs/*.yaml` 中。如果没有可用的合成规则，提取阶段会回退到 `GMLLM/rules_fallback.py` 中的本地规则。
+
+## 数据目录
+
+数据集根目录由配置文件中的 `dataset.base_path` 指定。
+
+期望的源码目录结构：
+
+```text
+DATASET_ROOT/
+├── benign/
+│   ├── 2022-01/
+│   │   └── package_name/
+│   │       └── *.py
+│   └── ...
+└── malicious/
+    ├── 2022-01/
+    │   └── package_name/
+    │       └── *.py
+    └── ...
 ```
 
-### `extract_config.json` — field meanings
+图特征和词表会写回数据集根目录，例如：
 
-**paths**
-- `src_dir`: Default source root (used when `--src` is not provided).
-- `out_dir`: Default output root (used when `--out` is not provided).
-- `synth_rules_out`: Path to save synthesized rules (`synth_rules.json`); reused if present.
-- `cache_file`: Cache file for LLM calls (kept for backward compatibility; rarely used in the current flow).
-
-**llm** *(no API keys here; keys are read from environment variables)*
-- `provider`: LLM provider (`openai` or `azure`).
-- `model_name`: Model used for **rule synthesis** (not per-node labeling).
-- `temperature`: Sampling temperature (recommend `0.0` for stability).
-- `max_retries`: Retry times on synthesis failure.
-- `timeout_s`: Timeout per API request (seconds).
-- `auto_synthesize`: If an API key is detected, first **synthesize rules → apply** for this run.
-
-**detector**
-- `use_rule_fallback`: If synthesis is unavailable or fails, fall back to local rules in `rules_fallback.py`.
-
-- With API keys set (OpenAI or Azure), the extractor will first ask the LLM to synthesize a ruleset via PROMPT_COMM, save it to synth_rules.json, safely compile each lambda n: ..., and apply it to the whole project.
-
-- If API is missing or synthesis fails, it falls back to rules_fallback.py.
-
-- We do not call the LLM per node at labeling time; we only use the LLM once to generate rules.
-
-### 1.2 Run extractor
-**With API (recommended path: synthesize → apply → label locally)**
-```bash
-# Choose one provider
-export OPENAI_API_KEY=...            # or: export AZURE_OPENAI_API_KEY=...
-python extractAST/cli_extract.py \
-  --config-extract extractAST/extract_config.json \
-  --src /path/to/one_python_project \
-  --out /path/to/output_dir_for_this_project
-# → writes call_graph.json into the given --out directory
-# → writes synth_rules.json at paths.synth_rules_out (if enabled)
+```text
+DATASET_ROOT/
+├── vocab/
+│   ├── name2idx.json
+│   ├── type2idx.json
+│   ├── behavior2idx.json
+│   └── edge_type2idx.json
+├── benign_call_processed/
+└── malicious_call_processed/
 ```
-**Without API (fully offline; local fallback rules)**
+
+## 主流程
+
+以下命令均在仓库根目录下运行。
+
+### 1. 提取 Call Graph
+
 ```bash
-python extractAST/cli_extract.py \
-  --config-extract extractAST/extract_config.json \
-  --src /path/to/one_python_project \
-  --out /path/to/output_dir_for_this_project
+python GMLLM/cli_extract.py --config GMLLM/configs/default.yaml
 ```
-**Output schema (high-level):**
 
-- nodes: [{ id, name, qualified_name, type, file, context, behaviors }, ... ]
+输入：
+- `dataset.base_path`、`dataset.benign_root`、`dataset.malicious_root`
+- `llm.model_name`、`llm.base_url`、`llm.api_key_env`
+- 可选的合成规则文件，例如 `GMLLM/synth_rules.json`
 
-- links: [{ source, target, edge_type }, ... ]
+输出：
+- 每个包一个 call graph JSON，文件名通常是 `{model_name}_call_graph.json`
+- 提取日志
 
-If synth_rules.json exists, it will be reused and can be versioned for reproducibility.
+call graph 的主要结构：
 
-## 2) Organize data for training
-Create a dataset root with two subfolders (each package in its own subfolder containing `call_graph.json`):
-```bash
-DATA_ROOT/
-├─ benign_call/
-│  ├─ pkgA/ call_graph.json
-│  ├─ pkgB/ call_graph.json
-│  └─ ...
-└─ malicious_call/
-   ├─ pkgC/ call_graph.json
-   ├─ pkgD/ call_graph.json
-   └─ ...
+```text
+nodes: [{id, type, name, qualified_name, file, context, behaviors}, ...]
+links: [{source, target, edge_type}, ...]
 ```
-Tip: when running `cli_extract.py`, set `--out` to `.../benign_call/pkgA` etc.
 
-## 3) Build vocab & PyG tensors
+### 2. 生成图特征
+
 ```bash
-python generate_graph_data_fromJson.py \
-  --normal-root    /path/to/DATA_ROOT/benign_call \
-  --malicious-root /path/to/DATA_ROOT/malicious_call \
-  --normal-out     /path/to/DATA_ROOT/benign_handled \
-  --malicious-out  /path/to/DATA_ROOT/malicious_handled \
-  --vocab-dir      /path/to/DATA_ROOT/vocab
+python GMLLM/generate_graph_data_fromJson.py --config GMLLM/configs/default.yaml
 ```
-This step:
 
-- scans both roots,
+输入：
+- 上一步生成的 call graph JSON
+- `continual_learning.base_train_months`
+- `continual_learning.incremental_months`
 
-- builds and saves `vocab/name2idx.json`, `vocab/type2idx.json`, `vocab/edge_type2idx.json`, `vocab/behavior2idx.json`,
+输出：
+- `dataset.vocab_dir` 下的词表 JSON
+- `dataset.benign_out` 和 `dataset.malicious_out` 下的 PyTorch Geometric `.pt` 图文件
+- 每个月的 `index.json`
 
-- creates `.pt` samples and an index under `*_handled/`.
+图特征包含：
+- 函数名/节点名 embedding id
+- 节点类型 embedding id
+- 敏感行为 one-hot 向量
+- 边和边类型
 
-**Repro tip**: Always train and infer with the same vocab/*.json to avoid OOV drift.
+### 3. 训练基础 GNN
 
-## 4) Train the GNN
 ```bash
-python trainGNN.py \
-  --vocab-dir     /path/to/DATA_ROOT/vocab \
-  --benign-root   /path/to/DATA_ROOT/benign_call \
-  --malicious-root /path/to/DATA_ROOT/malicious_call \
-  --benign-out    /path/to/DATA_ROOT/benign_handled \
-  --malicious-out /path/to/DATA_ROOT/malicious_handled \
-  --device cuda
+python GMLLM/distinguish_GNN_2.py --config GMLLM/configs/default.yaml
 ```
-- Model: `GCNWithBehavior` (embeddings for `name/type` + one-hot `behaviors`).
 
-- Reports Acc/F1/malicious recall; saves best weights.
+输入：
+- 词表文件
+- 处理后的 `.pt` 图文件
+- `training`、`model`、`continual_learning`、`paths` 中的训练配置
 
-## 5) Explain: GNNExplainer batch
-Use the scripts under `GNNExplainer/` (paths in `GNNExplainer/config.json` use `XXXX` placeholders).
-**Parallel driver**:
+输出：
+- 基础模型，通常是 `GMLLM/models/base_model.pt`
+- 未来月份测试结果 JSON，默认写到 `../results`
+
+模型为 `GCNWithBehavior`：函数名 embedding、类型 embedding、敏感行为向量、两层 GCN、mean pooling 和二分类器。
+
+### 4. 带记忆池的增量学习
+
 ```bash
-python GNNExplainer/run_autoexplanation_parallel.py \
+python GMLLM/continual_learning_memory.py --config GMLLM/configs/default.yaml
+```
+
+输入：
+- `paths.pretrained_model` 指定的基础模型
+- 按月处理好的图数据
+- `continual_learning.memory_per_month`
+- `continual_learning.use_memory`
+
+输出：
+- 每个月的增量模型，例如 `GMLLM/models/incremental_unk_model_YYYY-MM.pt`
+- future-month 和 seen-month 结果 JSON，默认写到 `../results`
+
+记忆池会从历史月份中按良性/恶意 1:1 抽样，并在训练时交替使用当月 batch 和记忆池 batch。
+
+## 可选解释模块
+
+`GMLLM/run_autoexplanation_parallel.py` 用来并行启动 `GMLLM/auto_explanation.py`。
+
+预期用途：
+
+```text
+训练好的 GNN + 包图
+  -> GNN 解释 mask
+  -> 可疑恶意子图
+  -> LLM 判断
+```
+
+这部分代码来自其他论文实现，当前仓库中没有完整测试过，可能依赖缺失的 `config.json`、`build_single_graph_ckpt.py`、`extract2Json.py` 或额外的工具模块。它应被视为可选后处理模块，不是主训练流程的必需步骤。
+
+示例命令：
+
+```bash
+python GMLLM/run_autoexplanation_parallel.py \
   --num-workers 4 \
   --gpus 0,1 \
-  --dataset-type normal
+  --dataset-type malicious
 ```
 
-**Single worker**:
-```bash
-python GNNExplainer/auto_explanation.py \
-  --worker-id 0 --total-workers 1 \
-  --gpu-id 0 \
-  --dataset-type normal
+## 脚本说明
+
+| 文件 | 作用 | 输入 | 输出 |
+|---|---|---|---|
+| `GMLLM/cli_extract.py` | 批量提取 call graph | YAML 配置、包源码目录 | `{model_name}_call_graph.json` |
+| `GMLLM/ast_parser.py` | Python AST 解析 | `.py` 文件 | 函数、调用、字面量节点 |
+| `GMLLM/graph_builder.py` | 构建项目调用图 | AST 解析结果、检测器 | graph dict |
+| `GMLLM/llm_detector.py` | 敏感行为检测 | 节点信息、规则 | behavior labels |
+| `GMLLM/rules_fallback.py` | 本地兜底规则 | 函数名/字面量 | 匹配到的行为标签 |
+| `GMLLM/prompts.py` | LLM prompt 模板 | 无 | prompt 文本 |
+| `GMLLM/llm_client.py` | OpenAI 兼容客户端 | API key、base URL | client 对象 |
+| `GMLLM/exporter.py` | 写出 graph JSON | graph dict | 校验后的 JSON |
+| `GMLLM/generate_graph_data_fromJson.py` | 生成图特征 | call graph JSON、配置 | vocab 和 `.pt` 文件 |
+| `GMLLM/distinguish_GNN_2.py` | 基础 GNN 训练/测试 | vocab、`.pt`、配置 | `base_model.pt`、指标 |
+| `GMLLM/continual_learning_memory.py` | 按月增量学习 | base model、`.pt` | 月度模型、指标 |
+| `GMLLM/run_autoexplanation_parallel.py` | 可选解释模块并行启动器 | worker/GPU 参数 | worker 日志 |
+| `GMLLM/auto_explanation.py` | 可选解释 worker | 外部配置和脚本 | 解释结果 |
+| `GMLLM/explain.py` | 可选 GNNExplainer 逻辑 | explainer checkpoint | mask/图/日志 |
+| `GMLLM/explainer_main.py` | 可选 explainer 入口 | checkpoint 参数 | 解释日志 |
+| `GMLLM/direct_call_llm_local.py` | 直接调用 LLM 的基线 | direct-call 配置、源码包 | 每包 LLM JSON |
+| `GMLLM/extract_qwen_results.py` | 汇总 LLM 结果 | 每包 LLM JSON | CSV |
+| `GMLLM/calc_metrics.py` | 计算 LLM 检测指标 | CSV | 指标 JSON |
+| `GMLLM/calc_token_stats.py` | 统计 token | CSV | token 统计 JSON |
+| `GMLLM/test_single_package.py` | 单包调试 | call graph、模型、vocab | 预测结果或 `.pt` |
+| `GMLLM/test_seen_months.py` | seen-month 评估实验 | 增量模型 | seen-month 指标 |
+| `GMLLM/upper.py` | 累积训练基线 | 历史图数据 | 基线模型和指标 |
+
+## 配置
+
+主要配置文件在 `GMLLM/configs/`。
+
+重要字段：
+
+- `llm`：模型名、接口地址、上下文长度、合成规则相关选项。
+- `dataset`：数据集根目录、良性/恶意源码目录、处理后输出目录、词表目录、call graph 文件名。
+- `training`：epoch、batch size、学习率、数据划分比例、随机种子。
+- `model`：GNN hidden dim、类别数、dropout。
+- `continual_learning`：基础训练月份、增量月份、记忆池大小、是否使用记忆池。
+- `paths`：模型目录、结果目录、预训练模型路径、checkpoint 前缀。
+- `device`：`auto`、`cuda` 或 `cpu`。
+
+当前 `configs/` 中有多份 DeepSeek、Llama、Qwen 和记忆池消融配置，重复内容较多。更简洁的组织方式是保留一个完整的 `default.yaml`，其他配置只写差异，并继续使用现有的 `parent` 继承机制：
+
+```text
+configs/
+├── default.yaml
+├── profiles/
+│   ├── deepseek.yaml
+│   ├── llama2.yaml
+│   └── qwen2_5.yaml
+└── ablations/
+    ├── memory_20.yaml
+    ├── memory_30.yaml
+    └── no_memory.yaml
 ```
 
-Pipeline per sample:
+模型 profile 通常只需要覆盖这些字段：
 
-1. `build_single_graph_ckpt.py` → single-graph checkpoint (`model_state_dict` + `cg_dict`)
+```yaml
+parent: "../default.yaml"
 
-2. `explainer_main.py` → masked adjacency `masked_adj_*.npy`
+llm:
+  model_name: "deepseek"
+  base_url: "http://..."
+  context_length: 4096
 
-3. `extract2Json.py` → JSON explanation from mask + call_graph
+dataset:
+  vocab_dir: "vocab_deepseek"
+  benign_out: "benign_call_processed_deepseek"
+  malicious_out: "malicious_call_processed_deepseek"
+  call_graph_filename: "deepseek_call_graph.json"
 
-## 6) LLM judgement on subgraphs
-The module `call_LLM/` turns masked subgraphs into LLM assessments.
-
-Configure `call_LLM/config_LLM.json` (keep `XXXX` placeholders):
-
-- `provider`: `"azure" | "openai" | "local"` (OpenAI-compatible base URL like Ollama)
-
-- `paths.root_directory`: explainer logs root with `graph_*` folders
-
-- `paths.call_graph_base_path`: root containing `<pkg>/call_graph.json`
-
-- `mask_filename`: default masked adjacency file name
-
-- plus concurrency and timeouts
-
-Run
-```bash
-# example: OpenAI
-export OPENAI_API_KEY=...
-python call_LLM/llm_subgraph_runner.py
+paths:
+  models_dir: "./models/deepseek"
+  results_dir: "../results_deepseek"
+  pretrained_model: "./models/deepseek/base_model.pt"
+  prefix: "incremental_"
 ```
 
-Output: `llm_results.json` with fields `{ name, verdict, reasoning, mitigation }`, resumable and parallel.
+新实验建议使用：
 
+```text
+GMLLM/models/
+├── default/
+├── deepseek/
+└── llama2/
+```
 
-## 7) Repro/Determinism tips
-- Use the same vocab folder across training/inference.
+而不是继续增加 `models_deepseek/`、`models_llama2/` 这类平铺目录。
 
-- When using CUDA, enabling full deterministic ops may incur a small performance drop.
+注意：当前部分训练加载逻辑内部默认读取 `call_graph.json`。如果某个 profile 生成的是 `deepseek_call_graph.json` 这类模型专属文件名，训练前需要保证文件名策略一致。
 
-## 8) Baselines
-For how to run the baseline scripts, see BASELINES.md.
+## 当前输出
 
----
-### Dataset and Supplementary Material
+仓库中已有的模型输出包括：
 
-To ensure stability and long-term access, the complete dataset and a snapshot of the source code for this project are permanently archived on Zenodo. This supplementary material is provided for the purpose of anonymous peer review.
+```text
+GMLLM/models/
+GMLLM/models_deepseek/
+GMLLM/models_llama2/
+```
 
-**You can access the archive here:**
+这些目录可以保留，用于复现实验。上面的 `models/<profile>/` 只是后续新实验的简化建议。
 
-* **[Anonymous Zenodo Repository for Review](https://zenodo.org/records/17182081?preview=1&token=eyJhbGciOiJIUzUxMiJ9.eyJpZCI6IjlhODQ1YTA1LTZmNWItNDM4Ni04MGQxLTFjOTdkZTE2NTczOSIsImRhdGEiOnt9LCJyYW5kb20iOiJhNzIyZGQ1M2NhM2U1NzBlNTVlZjE2ZDljYjNjODEzMSJ9.IksQTU47sii4gEmaZ1uuDcH9I3W6A4L6LGZsfxB9wABvcxtiDb4gzZ8SNMlzeZY-S0p05V749xW8R2tydux5pQ)**
+## 最小复现实验
 
----
+1. 在 `GMLLM/configs/` 中选定或修改一个配置文件。
+2. 用 `cli_extract.py` 提取 call graph。
+3. 用 `generate_graph_data_fromJson.py` 生成词表和 PyG 图特征。
+4. 用 `distinguish_GNN_2.py` 训练基础 GNN。
+5. 用 `continual_learning_memory.py` 进行按月增量学习。
+6. 如需可解释性分析，在补齐外部依赖后再运行解释模块。
