@@ -8,6 +8,6 @@ llm:
   context_length: 32768
 
 result_filename: "qwen2_5.json"
-dataset_base: "/Data1/hxq/datasets/incremental_packages_dynamic_capping_subset"
+dataset_base: "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset"
 start_month: "2022-01"
 end_month: "2024-12"

@@ -41,7 +41,7 @@ fi
 # 结果文件的基础名称（不含扩展名）
 RESULT_BASE="CL_unk_test_than_train"
 
-cd /Data1/hxq/GMLLM/GMLLM
+cd /Data2/hxq/GMLLM/GMLLM
 
 echo "=========================================="
 echo "配置信息"

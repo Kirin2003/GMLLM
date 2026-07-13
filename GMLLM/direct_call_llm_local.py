@@ -418,7 +418,7 @@ def main():
     logger.log(f"[DEBUG] LLM 配置: model={LLM_MODEL}")
     logger.log(f"[DEBUG] base_url: {LLM_CONFIG.get('base_url', 'NOT FOUND')}")
 
-    dataset_base = CONFIG.get("dataset_base", "/Data1/hxq/datasets/incremental_packages_dynamic_capping_subset")
+    dataset_base = CONFIG.get("dataset_base", "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset")
     batch_analyze_packages(dataset_base)
 
 

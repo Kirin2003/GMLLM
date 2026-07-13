@@ -70,7 +70,7 @@ if __name__ == "__main__":
                         help='模型名称')
     args = parser.parse_args()
 
-    dataset_base = "/Data1/hxq/datasets/incremental_packages_dynamic_capping_subset"
+    dataset_base = "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset"
     output_csv = str(Path(__file__).resolve().parent.parent / "results" / f"direct_call_llm_local_{args.model}.csv")
     json_filename = f"{args.model}.json"
     extract_qwen_results_to_csv(dataset_base, output_csv, json_filename)
