@@ -212,7 +212,8 @@ def run_base_model(
     device: str = "cuda",
     seed: int = 42,
     model_save_path: str = "./models/base_model.pt",
-    result_file: str = "test_than_train_future_test_results.json"
+    result_file: str = "test_than_train_future_test_results.json",
+    results_dir: str = "../results"
 ):
     """运行基础模型训练和测试流程"""
     set_seed(seed)
@@ -308,7 +309,7 @@ def run_base_model(
     )
 
     # 保存结果
-    results_dir = Path("../results")
+    results_dir = Path(results_dir)
     os.makedirs(results_dir, exist_ok=True)
     with open(results_dir / result_file, 'w') as f:
         json.dump(test_results, f, indent=2)
@@ -356,7 +357,9 @@ if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu" if device_config == 'auto' else device_config
 
     # 路径配置
-    models_dir = config['paths']['models_dir']
+    paths_config = config.get('paths', {})
+    models_dir = paths_config.get('models_dir', './models')
+    results_dir = paths_config.get('results_dir', '../results')
 
     # 增量学习配置
     cl_config = config.get('continual_learning', {})
@@ -381,5 +384,6 @@ if __name__ == "__main__":
         device=device,
         seed=seed,
         model_save_path=f"{models_dir}/base_model.pt",
-        result_file=base_model_result_file
+        result_file=base_model_result_file,
+        results_dir=results_dir
     )

@@ -204,19 +204,27 @@ python GMLLM/run_autoexplanation_parallel.py \
 - `paths`：模型目录、结果目录、预训练模型路径、checkpoint 前缀。
 - `device`：`auto`、`cuda` 或 `cpu`。
 
-当前 `configs/` 中有多份 DeepSeek、Llama、Qwen 和记忆池消融配置，重复内容较多。更简洁的组织方式是保留一个完整的 `default.yaml`，其他配置只写差异，并继续使用现有的 `parent` 继承机制：
+当前 `configs/` 保留一个完整的 `default.yaml`，其他配置只写差异，并继续使用现有的 `parent` 继承机制：
 
 ```text
 configs/
 ├── default.yaml
 ├── profiles/
 │   ├── deepseek.yaml
+│   ├── deepseek_no_memory.yaml
 │   ├── llama2.yaml
 │   └── qwen2_5.yaml
-└── ablations/
-    ├── memory_20.yaml
-    ├── memory_30.yaml
-    └── no_memory.yaml
+├── ablations/
+│   ├── memory_20.yaml
+│   ├── memory_30.yaml
+│   └── no_memory.yaml
+├── baselines/
+│   └── upper.yaml
+├── direct_call/
+│   ├── deepseek.yaml
+│   ├── llama2.yaml
+│   └── qwen2_5.yaml
+└── archive/
 ```
 
 模型 profile 通常只需要覆盖这些字段：
@@ -237,39 +245,42 @@ dataset:
 
 paths:
   models_dir: "./models/deepseek"
-  results_dir: "../results_deepseek"
+  results_dir: "../results"
   pretrained_model: "./models/deepseek/base_model.pt"
   prefix: "incremental_"
 ```
 
-新实验建议使用：
+模型输出统一使用：
 
 ```text
 GMLLM/models/
 ├── default/
 ├── deepseek/
-└── llama2/
+├── deepseek_no_memory/
+├── llama2/
+└── qwen2_5/
 ```
 
-而不是继续增加 `models_deepseek/`、`models_llama2/` 这类平铺目录。
+不要再增加 `models_deepseek/`、`models_llama2/` 这类平铺目录。增量模型命名为 `incremental_YYYY-MM.pt`。
 
-注意：当前部分训练加载逻辑内部默认读取 `call_graph.json`。如果某个 profile 生成的是 `deepseek_call_graph.json` 这类模型专属文件名，训练前需要保证文件名策略一致。
+注意：`cli_extract.py` 默认写出 `{model_name}_call_graph.json`，`generate_graph_data_fromJson.py` 会读取配置中的 `dataset.call_graph_filename`。新增 profile 时需要让这两个名称一致。
 
 ## 当前输出
 
 仓库中已有的模型输出包括：
 
 ```text
-GMLLM/models/
-GMLLM/models_deepseek/
-GMLLM/models_llama2/
+GMLLM/models/default/base_model.pt
+GMLLM/models/deepseek/base_model.pt
+GMLLM/models/deepseek/incremental_2024-01.pt ... incremental_2024-12.pt
+GMLLM/models/deepseek_no_memory/incremental_2024-01.pt ... incremental_2024-12.pt
+GMLLM/models/llama2/base_model.pt
+GMLLM/models/llama2/incremental_2024-01.pt ... incremental_2024-12.pt
 ```
-
-这些目录可以保留，用于复现实验。上面的 `models/<profile>/` 只是后续新实验的简化建议。
 
 ## 最小复现实验
 
-1. 在 `GMLLM/configs/` 中选定或修改一个配置文件。
+1. 在 `GMLLM/configs/` 中选定或修改一个配置文件，例如 `default.yaml` 或 `profiles/deepseek.yaml`。
 2. 用 `cli_extract.py` 提取 call graph。
 3. 用 `generate_graph_data_fromJson.py` 生成词表和 PyG 图特征。
 4. 用 `distinguish_GNN_2.py` 训练基础 GNN。

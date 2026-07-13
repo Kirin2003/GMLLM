@@ -1,0 +1,21 @@
+parent: "../profiles/qwen2_5.yaml"
+
+# Archived: the original llama3 config pointed call_graph_filename at qwen2.5
+# data and no matching local model output directory was present.
+llm:
+  model_name: "llama-3"
+  base_url: "http://192.168.1.101:60103/v1"
+  context_length: 8192
+
+dataset:
+  vocab_dir: "vocab_llama3"
+  benign_out: "benign_call_processed_llama3"
+  malicious_out: "malicious_call_processed_llama3"
+
+results:
+  future_month: "CL_unk_test_than_train_future_month_llama3.json"
+  base_model_result_file: "base_model_in_future_month_once_llama3.json"
+
+paths:
+  models_dir: "./models/llama3"
+  pretrained_model: "./models/llama3/base_model.pt"

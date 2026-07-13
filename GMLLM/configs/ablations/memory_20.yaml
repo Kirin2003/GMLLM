@@ -1,0 +1,12 @@
+parent: "../default.yaml"
+
+continual_learning:
+  memory_per_month: 20
+
+results:
+  future_month: "CL_unk_memory_20_test_than_train_future_month.json"
+
+paths:
+  models_dir: "./models/default_memory_20"
+  pretrained_model: "./models/default/base_model.pt"
+  prefix: "incremental_"

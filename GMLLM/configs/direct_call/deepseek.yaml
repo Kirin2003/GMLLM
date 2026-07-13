@@ -1,5 +1,3 @@
-# direct_call_llm 配置
-
 log_file: "direct_call_llm_deepseek.log"
 
 llm_provider: "deepseek"
@@ -9,13 +7,9 @@ llm:
   base_url: "http://192.168.1.101:60102/v1"
   context_length: 4096
 
-# 批量分析时每个包的结果文件名
 result_filename: "deepseek.json"
-
-# 扫描月份范围
+dataset_base: "/Data1/hxq/datasets/incremental_packages_dynamic_capping_subset"
 start_month: "2022-01"
 end_month: "2024-12"
-
-# 增量月份范围
 incremental_start_month: "2024-01"
 incremental_end_month: "2024-12"

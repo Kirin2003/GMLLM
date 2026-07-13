@@ -4,6 +4,21 @@ import yaml
 from collections import defaultdict
 from pathlib import Path
 
+
+def resolve_direct_call_config(model: str) -> Path:
+    base_dir = Path(__file__).parent / "configs"
+    candidates = [
+        base_dir / "direct_call" / f"{model}.yaml",
+        base_dir / f"direct_call_llm_{model}.yaml",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    raise FileNotFoundError(
+        f"Direct-call config for '{model}' not found. Tried: "
+        + ", ".join(str(p) for p in candidates)
+    )
+
 def calculate_metrics(input_csv: str, output_json: str, start_month: str = None, end_month: str = None):
     """Calculate precision/recall/f1 for malicious package detection.
 
@@ -97,21 +112,22 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="计算LLM检测结果的precision/recall/f1指标")
     parser.add_argument('--model', '-m', type=str, required=True,
-                        choices=['qwen3_5_27b', 'qwen2_5', 'deepseek', 'llama2'],
+                        choices=['qwen2_5', 'deepseek', 'llama2'],
                         help='模型名称')
     parser.add_argument('--continual', '-c', action='store_true',
                         help='增量模式：从配置文件读取月份范围，只计算该范围内的平均指标')
     args = parser.parse_args()
 
-    input_csv = f"/Data2/hxq/GMLLM/results/direct_call_llm_local_{args.model}.csv"
-    output_json = f"/Data2/hxq/GMLLM/results/direct_call_llm_local_{args.model}.json"
+    results_dir = Path(__file__).resolve().parent.parent / "results"
+    input_csv = str(results_dir / f"direct_call_llm_local_{args.model}.csv")
+    output_json = str(results_dir / f"direct_call_llm_local_{args.model}.json")
 
     start_month = None
     end_month = None
 
     if args.continual:
         # Load config file
-        config_path = Path(__file__).parent / "configs" / f"direct_call_llm_{args.model}.yaml"
+        config_path = resolve_direct_call_config(args.model)
         with open(config_path, 'r') as f:
             config = yaml.safe_load(f)
         start_month = config.get('incremental_start_month')

@@ -41,8 +41,10 @@ def run_accumulate_train(
     val_ratio: float = 0.1,
     device: str = "cuda" if torch.cuda.is_available() else "cpu",
     seed: int = 42,
+    pretrained_model_path: str = "./models/default/base_model.pt",
     result_file: str = "accumulate_train_results.json",
-    model_save_path: str = "./models/accumulate_train_model_"
+    model_save_path: str = "./models/accumulate_train_model_",
+    results_dir: str = "../results"
 ):
     """
     累积训练：每月用之前所有月份数据训练，测试下一个月（无记忆池）
@@ -64,7 +66,7 @@ def run_accumulate_train(
         result_file: 结果保存文件名
         model_save_path: 模型保存路径前缀
     """
-    output_dir = "../results/"
+    output_dir = results_dir
 
     set_seed(seed)
 
@@ -167,9 +169,8 @@ def run_accumulate_train(
         type_vocab_size=len(type2idx),
         behavior_dim=len(behavior2idx)
     ).to(device)
-    base_model_path = "/Data2/hxq/GMLLM/GMLLM/models/base_model.pt"
-    base_model.load_state_dict(torch.load(base_model_path, map_location=device))
-    log.log(f"Loaded base model from {base_model_path}")
+    base_model.load_state_dict(torch.load(pretrained_model_path, map_location=device))
+    log.log(f"Loaded base model from {pretrained_model_path}")
 
     # 测试 2023-03
     log.log(f"Evaluating on {test_month_03}...")
@@ -343,6 +344,8 @@ if __name__ == "__main__":
     result_file = results_config.get('accumulate_train', 'accumulate_train_results.json')
 
     models_dir = paths_config.get('models_dir', './models')
+    results_dir = paths_config.get('results_dir', '../results')
+    pretrained_model_path = paths_config.get('pretrained_model', './models/default/base_model.pt')
     model_prefix = paths_config.get('prefix', 'upper_model_')
     model_save_path = f"{models_dir}/{model_prefix}"
 
@@ -362,6 +365,8 @@ if __name__ == "__main__":
         val_ratio=val_ratio,
         device=device,
         seed=seed,
+        pretrained_model_path=pretrained_model_path,
         result_file=result_file,
-        model_save_path=model_save_path
+        model_save_path=model_save_path,
+        results_dir=results_dir
     )

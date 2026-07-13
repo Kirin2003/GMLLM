@@ -7,12 +7,13 @@ llm:
 # 数据集配置
 dataset:
   name: "incremental_packages_dynamic_capping_subset"
-  base_path: "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset"
+  base_path: "/Data1/hxq/datasets/incremental_packages_dynamic_capping_subset"
   vocab_dir: "vocab"
   benign_root: "benign"
   malicious_root: "malicious"
   benign_out: "benign_call_processed"
   malicious_out: "malicious_call_processed"
+  call_graph_filename: "qwen3-max_call_graph.json"
 
 # 训练配置
 training:
@@ -47,10 +48,10 @@ results:
 
 # 路径配置
 paths:
-  models_dir: "./models"
+  models_dir: "./models/default"
   results_dir: "../results"
-  pretrained_model: "./models/base_model.pt"
-  prefix: "incremental_unk_model_"
+  pretrained_model: "./models/default/base_model.pt"
+  prefix: "incremental_"
 
 # 设备配置 (auto/cuda/cpu)
 device: "auto"

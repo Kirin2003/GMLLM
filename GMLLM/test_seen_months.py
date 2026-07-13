@@ -39,10 +39,11 @@ def run_continual_learning_unk(
     seed: int = 42,
     pretrained_model_path: str = "./models/base_model.pt",
     result_file: str = "continual_learning_unk_test_than_train_future_month.json",
-    model_save_path: str = "./models/incremental_unk_model_"
+    model_save_path: str = "./models/incremental_unk_model_",
+    results_dir: str = "../results"
 ):
-    output_dir = "../results/"
-    future_results_file = output_dir + result_file
+    output_dir = Path(results_dir)
+    future_results_file = output_dir / result_file
     print(f"Results will be saved to: {future_results_file}")
     """
     方案1: UNK映射（对照组）
@@ -188,12 +189,11 @@ def run_continual_learning_unk(
 
 
     # 保存新API统计
-    output_dir = "../results/"
-    os.makedirs(output_dir, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
 
     # 保存已见月份结果
-    seen_results_file = output_dir + result_file.replace('future_month', 'seen_month')
+    seen_results_file = output_dir / result_file.replace('future_month', 'seen_month')
     with open(seen_results_file, 'w') as f:
         json.dump(seen_months_results, f, indent=2)
     log.log(f"Seen months results saved to {seen_results_file}")
@@ -251,6 +251,7 @@ if __name__ == "__main__":
 
     # 模型保存路径配置 (组合 models_dir 和 prefix)
     models_dir = paths_config.get('models_dir', './models')
+    results_dir = paths_config.get('results_dir', '../results')
     model_prefix = paths_config.get('prefix')
     model_save_path = f"{models_dir}/{model_prefix}"
 
@@ -268,5 +269,6 @@ if __name__ == "__main__":
         seed=seed,
         pretrained_model_path=pretrained_model_path,
         result_file=result_file,
-        model_save_path=model_save_path
+        model_save_path=model_save_path,
+        results_dir=results_dir
     )

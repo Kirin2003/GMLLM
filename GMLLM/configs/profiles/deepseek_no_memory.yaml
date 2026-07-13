@@ -1,0 +1,13 @@
+parent: "deepseek.yaml"
+
+continual_learning:
+  base_train_months: ["2022-01", "2023-12"]
+  use_memory: false
+
+results:
+  future_month: "CL_unk_test_than_train_future_month_deepseek_no_memory.json"
+
+paths:
+  models_dir: "./models/deepseek_no_memory"
+  pretrained_model: "./models/deepseek/base_model.pt"
+  prefix: "incremental_"

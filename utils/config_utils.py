@@ -24,7 +24,7 @@ def load_config(config_path: str) -> Dict[str, Any]:
     然后与当前配置进行深度合并。当前配置会覆盖 parent 的配置。
 
     Usage:
-        config = load_config("configs/CL_unk.yaml")
+        config = load_config("configs/ablations/no_memory.yaml")
 
     Example:
         # default.yaml
@@ -33,7 +33,7 @@ def load_config(config_path: str) -> Dict[str, Any]:
         training:
           epochs: 60
 
-        # CL_unk.yaml
+        # ablations/no_memory.yaml
         parent: "default.yaml"
         training:
           epochs: 30  # 覆盖为30

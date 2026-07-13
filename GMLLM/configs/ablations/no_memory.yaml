@@ -1,0 +1,12 @@
+parent: "../default.yaml"
+
+continual_learning:
+  use_memory: false
+
+results:
+  future_month: "CL_unk_no_memory_test_than_train_future_month.json"
+
+paths:
+  models_dir: "./models/default_no_memory"
+  pretrained_model: "./models/default/base_model.pt"
+  prefix: "incremental_"

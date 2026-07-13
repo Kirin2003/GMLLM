@@ -22,14 +22,19 @@ fi
 MODEL=$1
 ITERATIONS=${2:-5}  # 默认运行 5 次
 
-# 根据模型组装配置文件路径
-CONFIG_FILE="./configs/default_with_${MODEL}.yaml"
+# 根据模型组装配置文件路径；也支持直接传入配置文件路径
+if [ -f "$MODEL" ]; then
+    CONFIG_FILE="$MODEL"
+    MODEL=$(basename "$MODEL" .yaml)
+else
+    CONFIG_FILE="./configs/profiles/${MODEL}.yaml"
+fi
 
 # 检查配置文件是否存在
 if [ ! -f "$CONFIG_FILE" ]; then
     echo "错误: 配置文件 $CONFIG_FILE 不存在"
     echo "可用的配置文件:"
-    ls -1 ./configs/default_with_*.yaml 2>/dev/null || echo "  (无)"
+    ls -1 ./configs/profiles/*.yaml 2>/dev/null || echo "  (无)"
     exit 1
 fi
 

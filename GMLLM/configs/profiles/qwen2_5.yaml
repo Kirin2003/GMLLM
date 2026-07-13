@@ -1,0 +1,28 @@
+parent: "../default.yaml"
+
+llm:
+  model_name: "qwen-2.5-coder-32b"
+  api_key_env: "123"
+  base_url: "http://192.168.1.101:60102/v1"
+  context_length: 32768
+  synth_rules: true
+
+dataset:
+  vocab_dir: "vocab_qwen2_5"
+  benign_out: "benign_call_processed_qwen2_5"
+  malicious_out: "malicious_call_processed_qwen2_5"
+  call_graph_filename: "qwen-2.5-coder-32b_call_graph.json"
+
+continual_learning:
+  base_train_months: ["2022-01", "2023-12"]
+  incremental_months: ["2024-01", "2024-12"]
+
+results:
+  future_month: "CL_unk_test_than_train_future_month_qwen2_5.json"
+  base_model_result_file: "base_model_in_future_month_once_qwen2_5.json"
+
+paths:
+  models_dir: "./models/qwen2_5"
+  results_dir: "../results"
+  pretrained_model: "./models/qwen2_5/base_model.pt"
+  prefix: "incremental_"

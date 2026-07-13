@@ -1,0 +1,22 @@
+{
+  "provider": "qwen3.5-27b-local",
+  "note": "Archived because current direct-call YAML files inline their LLM settings.",
+  "qwen3.5-27b-local": {
+    "model": "qwen-3.5-27b",
+    "api_key_env": "123",
+    "base_url": "http://192.168.1.101:60101/v1",
+    "context_length": 163840
+  },
+  "qwen2.5-coder-32b-local": {
+    "model": "qwen-2.5-coder-32b",
+    "api_key_env": "123",
+    "base_url": "http://192.168.1.101:60102/v1",
+    "context_length": 32768
+  },
+  "llama2-70b-local": {
+    "model": "llama-2",
+    "api_key_env": "123",
+    "base_url": "http://192.168.1.101:60101/v1",
+    "context_length": 163840
+  }
+}

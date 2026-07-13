@@ -24,11 +24,27 @@ def load_config(config_path: str) -> dict:
         return yaml.safe_load(f)
 
 
+def resolve_config_path(config_name: str) -> Path:
+    """Resolve direct-call config names in the new layout, with legacy fallback."""
+    base_dir = Path(__file__).parent / "configs"
+    candidates = [
+        base_dir / "direct_call" / f"{config_name}.yaml",
+        base_dir / f"direct_call_llm_{config_name}.yaml",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    raise FileNotFoundError(
+        f"Direct-call config '{config_name}' not found. Tried: "
+        + ", ".join(str(p) for p in candidates)
+    )
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="PyPI 包安全分析工具")
     parser.add_argument('--config', '-c', type=str,
-                        default='qwen3_5',
-                        help='配置文件名（不含路径和后缀），默认 qwen3_5')
+                        default='qwen2_5',
+                        help='配置文件名（不含路径和后缀），默认 qwen2_5')
     return parser.parse_args()
 
 
@@ -388,7 +404,7 @@ def main():
 
     args = parse_args()
     _config_name = args.config
-    _config_file = Path(__file__).parent / "configs" / f"direct_call_llm_{_config_name}.yaml"
+    _config_file = resolve_config_path(_config_name)
     CONFIG = load_config(str(_config_file))
 
     logger = Logger(CONFIG["log_file"])
@@ -402,7 +418,7 @@ def main():
     logger.log(f"[DEBUG] LLM 配置: model={LLM_MODEL}")
     logger.log(f"[DEBUG] base_url: {LLM_CONFIG.get('base_url', 'NOT FOUND')}")
 
-    dataset_base = "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset"
+    dataset_base = CONFIG.get("dataset_base", "/Data1/hxq/datasets/incremental_packages_dynamic_capping_subset")
     batch_analyze_packages(dataset_base)
 
 

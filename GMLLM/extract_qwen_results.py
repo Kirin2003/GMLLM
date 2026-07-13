@@ -66,11 +66,11 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="从JSON文件提取LLM分析结果到CSV")
     parser.add_argument('--model', '-m', type=str, required=True,
-                        choices=['qwen3_5_27b', 'qwen2_5', 'deepseek', 'llama2'],
+                        choices=['qwen2_5', 'deepseek', 'llama2'],
                         help='模型名称')
     args = parser.parse_args()
 
-    dataset_base = "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset"
-    output_csv = f"/Data2/hxq/GMLLM/results/direct_call_llm_local_{args.model}.csv"
+    dataset_base = "/Data1/hxq/datasets/incremental_packages_dynamic_capping_subset"
+    output_csv = str(Path(__file__).resolve().parent.parent / "results" / f"direct_call_llm_local_{args.model}.csv")
     json_filename = f"{args.model}.json"
     extract_qwen_results_to_csv(dataset_base, output_csv, json_filename)
