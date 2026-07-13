@@ -1,8 +1,7 @@
 # LLM 配置
 llm:
-  model_name: "qwen3-max"
-  synth_rules: false
-  synth_rules_path: "./synth_rules.json"
+  model_name: "qwen2.5-coder-32b-local"
+  synth_rules: true
 
 # 数据集配置
 dataset:

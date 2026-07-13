@@ -159,7 +159,7 @@ if __name__ == "__main__":
         use_rule_fallback=True,
     )
     if synth_rules:
-        log.log("正在合成规则...")
+        log.log(f"正在使用 {model_name} 合成规则...")
         try:
             obj = detector.synthesize_rules()
             synth_path.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -175,7 +175,7 @@ if __name__ == "__main__":
     except Exception as e:
         log.log(f"[warn] 规则加载失败，将使用 fallback 规则: {e}")
 
-    log.log("处理所有包...")
+    log.log(f"使用 {model_name} 处理所有包...")
     overall_start = time.time()
     batch_extract_call_graphs(
         detector=detector,

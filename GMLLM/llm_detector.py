@@ -5,6 +5,29 @@ from prompts import PROMPT_DATA, PROMPT_COMM
 from typing import Dict, List, Optional
 from rules_fallback import BEHAVIOR_RULES, KNOWN_LIBS, BUILTIN_DECOS
 from llm_client import get_llm_client
+
+def _load_llm_config() -> dict:
+    """加载 LLM 配置文件"""
+    config_path = Path(__file__).parent / "configs" / "llm_config.json"
+    if config_path.exists():
+        return json.loads(config_path.read_text(encoding="utf-8"))
+    return {}
+
+def _get_llm_credentials(model_name: str) -> tuple:
+    """根据 model_name 获取 api_key 和 base_url"""
+    config = _load_llm_config()
+    # 遍历配置，找到匹配的模型
+    for provider_name, provider_config in config.items():
+        if provider_name == "provider":
+            continue
+        if isinstance(provider_config, dict) and provider_config.get("model") == model_name:
+            api_key_env = provider_config.get("api_key_env", "")
+            api_key = os.environ.get(api_key_env, api_key_env) if api_key_env else ""
+            base_url = provider_config.get("base_url", "")
+            return api_key, base_url
+    # 未找到配置
+    return "", ""
+
 ALL_BEHAVIOR_TAGS: List[str] = [k for k in BEHAVIOR_RULES.keys()]
 SYS_prompt = PROMPT_DATA
 class LLMBehaviorDetector:
@@ -32,7 +55,9 @@ class LLMBehaviorDetector:
                 self.cache = json.loads(self.cache_path.read_text(encoding="utf-8"))
             except Exception:
                 self.cache = {}
-        self._openai_client = get_llm_client(provider, model_name)
+        api_key, base_url = _get_llm_credentials(model_name)
+        print("api_key, {api_key}, base_url, {base_url}")
+        self._openai_client = get_llm_client(api_key, base_url)
     def detect_behaviors(self, node_info: Dict) -> List[str]:
         key = self._key(node_info)
         if key in self.cache:
@@ -158,9 +183,7 @@ class LLMBehaviorDetector:
         if self._openai_client is None:
             raise RuntimeError("LLM client not available (no API key or SDK).")
         user_prompt = json.dumps({"allowed_hint": list(ALL_BEHAVIOR_TAGS)}, ensure_ascii=False)
-        print("chat qwen3-max")
         text = self._chat_once(PROMPT_COMM, user_prompt)
-        print(text)
         try:
             obj = json.loads(text)
             if isinstance(obj, dict) and "behaviors" in obj:
