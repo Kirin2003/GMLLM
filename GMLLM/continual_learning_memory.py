@@ -16,13 +16,9 @@ import time
 import torch
 import torch.nn as nn
 from pathlib import Path
-import argparse
-import yaml
 from utils.config_utils import load_config
-from torch_geometric.data import Dataset
 from torch_geometric.loader import DataLoader
 from torch.utils.data import ConcatDataset
-import random
 from utils.month_utils import generate_month_range
 from utils.data_utils import split_train_val_test, split_train_test
 from utils.data_loader import load_vocabs, load_month_dataset, build_dataloaders
@@ -30,165 +26,9 @@ import copy
 
 # 从 distinguish_GNN_2 导入模型定义
 from distinguish_GNN_2 import GCNWithBehavior, validate
+from continual_strategies import build_continual_strategy
 from utils.logger_utils import Logger
 log = Logger("continual_learning.log")
-
-
-def select_sample(month_datasets: dict, max_per_month: int = 10) -> list:
-    """
-    从每个月数据集中随机抽取样本，保持正负样本1:1
-
-    Args:
-        month_datasets: {month: (normal_dataset, malicious_dataset)}
-        max_per_month: 每月最多抽取样本数（默认10）
-
-    Returns:
-        list of (data, label, month) 元组列表
-    """
-    memory_samples = []
-
-    for month, (normal_ds, malicious_ds) in month_datasets.items():
-        # 计算每个类别抽取的数量（保持1:1比例）
-        n_select = min(max_per_month // 2, len(normal_ds), len(malicious_ds))
-
-        if n_select == 0:
-            continue
-
-        # 随机抽取正负样本索引
-        normal_indices = random.sample(range(len(normal_ds)), n_select)
-        malicious_indices = random.sample(range(len(malicious_ds)), n_select)
-
-        # 添加正样本 (label=0, benign)
-        for idx in normal_indices:
-            memory_samples.append((normal_ds[idx], 0, month))
-
-        # 添加负样本 (label=1, malicious)
-        for idx in malicious_indices:
-            memory_samples.append((malicious_ds[idx], 1, month))
-
-    return memory_samples
-
-
-class MemoryDataset(Dataset):
-    """记忆库数据集封装类"""
-
-    def __init__(self, samples_list):
-        """
-        Args:
-            samples_list: list of (data, label, month)
-        """
-        super().__init__()
-        self.samples = samples_list
-        # 为每个样本设置y属性
-        for data, label, month in self.samples:
-            data.y = torch.tensor([label], dtype=torch.long)
-
-    def len(self):
-        return len(self.samples)
-
-    def get(self, idx):
-        data, label, month = self.samples[idx]
-        return data
-
-
-def train_with_CL(model, new_task_loader, memory_loader, optimizer, criterion, device):
-    """
-    1:1 交替训练
-    [新任务batch1] -> [记忆库batch1] -> [新任务batch2] -> [记忆库batch2] -> ...
-
-    Args:
-        model: GCNWithBehavior 模型
-        new_task_loader: 当前新任务数据加载器
-        memory_loader: 记忆库数据加载器
-        optimizer: 优化器
-        criterion: 损失函数
-        device: 设备 (cuda/cpu)
-
-    Returns:
-        (avg_loss, accuracy)
-    """
-    model.train()
-    total_loss, correct, total = 0, 0, 0
-
-    new_iter = iter(new_task_loader)
-    mem_iter = iter(memory_loader) if memory_loader else None
-
-    while True:
-        # 训练新任务batch
-        try:
-            data = next(new_iter)
-            data = data.to(device)
-            optimizer.zero_grad()
-            out = model(data)
-            loss = criterion(out, data.y)
-            loss.backward()
-            optimizer.step()
-
-            pred = out.argmax(dim=1)
-            correct += (pred == data.y).sum().item()
-            total += data.num_graphs
-            total_loss += loss.item() * data.num_graphs
-        except StopIteration:
-            break
-
-        # 训练记忆库batch (1:1 交替)
-        if mem_iter:
-            try:
-                mem_data = next(mem_iter)
-                mem_data = mem_data.to(device)
-                optimizer.zero_grad()
-                mem_out = model(mem_data)
-                mem_loss = criterion(mem_out, mem_data.y)
-                mem_loss.backward()
-                optimizer.step()
-
-                mem_pred = mem_out.argmax(dim=1)
-                correct += (mem_pred == mem_data.y).sum().item()
-                total += mem_data.num_graphs
-                total_loss += mem_loss.item() * mem_data.num_graphs
-            except StopIteration:
-                mem_iter = iter(memory_loader)  # 重置，继续循环
-
-    return total_loss / total, correct / total
-
-def create_memory_loader(memory_samples: list, batch_size: int):
-    """创建记忆库数据加载器"""
-    if len(memory_samples) > 0:
-        memory_dataset = MemoryDataset(memory_samples)
-        return DataLoader(memory_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
-    return None
-
-
-def train_month(model, month_train_loader, memory_loader, optimizer, criterion,
-                device, epochs: int = 5) -> tuple:
-    """
-    训练当月任务（增量训练模式，memory_loader 必定有内容）
-
-    Args:
-        model: 模型
-        month_train_loader: 当月训练数据
-        memory_loader: 记忆库数据（必有内容）
-        optimizer: 优化器
-        criterion: 损失函数
-        device: 设备
-        epochs: 训练轮数
-
-    Returns:
-        (last_loss, last_acc)
-    """
-    last_loss, last_acc = 0.0, 0.0
-
-    for epoch in range(1, epochs + 1):
-        # 1:1 交替训练
-        train_loss, train_acc = train_with_CL(
-            model, month_train_loader, memory_loader,
-            optimizer, criterion, device
-        )
-
-        log.log(f"  Epoch {epoch:02d} | Loss: {train_loss:.4f} | Acc: {train_acc:.4f}")
-        last_loss, last_acc = train_loss, train_acc
-
-    return last_loss, last_acc
 
 
 def save_results(results: dict, output_path: str):
@@ -218,6 +58,8 @@ def run_continual_learning_unk(
     batch_size: int = 128,
     memory_per_month: int = 10,
     use_memory: bool = True,
+    continual_config: dict = None,
+    num_workers: int = 4,
     device: str = "cuda" if torch.cuda.is_available() else "cpu",
     seed: int = 42,
     pretrained_model_path: str = "./models/base_model.pt",
@@ -270,6 +112,19 @@ def run_continual_learning_unk(
     optimizer = torch.optim.Adam(model.parameters(), lr=0.005, weight_decay=1e-3)
     criterion = nn.CrossEntropyLoss()
 
+    if continual_config is None:
+        continual_config = {
+            "use_memory": use_memory,
+            "memory_per_month": memory_per_month,
+        }
+    strategy = build_continual_strategy(
+        continual_config,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        log=log,
+    )
+    log.log(f"Continual strategy: {strategy.name}")
+
     # 3. 加载数据
     train_datasets = {}
     test_datasets = {}
@@ -301,17 +156,13 @@ def run_continual_learning_unk(
         train_datasets[month] = (normal_train, malicious_train)
         test_datasets[month] = (normal_test, malicious_test)
 
-    # 4. 构建基础月份记忆库
-    memory_samples = []
-    if use_memory:
-        for month in generate_month_range(base_start, base_end):
-            if month in train_datasets:
-                normal_train, malicious_train = train_datasets[month]
-                month_datasets = {month: (normal_train, malicious_train)}
-                new_samples = select_sample(month_datasets, max_per_month=memory_per_month)
-                memory_samples.extend(new_samples)
-
-    print_memory_stats(memory_samples)
+    # 4. 初始化增量学习策略状态（例如 replay buffer）
+    strategy.before_incremental(
+        train_datasets=train_datasets,
+        base_months=generate_month_range(base_start, base_end),
+        model=model,
+        device=device,
+    )
 
     future_month_result = {'month': [], 'f1': [], 'acc': [], 'precision': [], 'recall': [], 'train_time': []}
     seen_months_results = {'month': [], 'f1': [], 'acc': [], 'precision': [], 'recall': []}
@@ -347,23 +198,24 @@ def run_continual_learning_unk(
         normal_train, malicious_train = train_datasets[month]
         month_train_dataset = ConcatDataset([normal_train, malicious_train])
         month_train_loader = DataLoader(
-            month_train_dataset, batch_size=batch_size, shuffle=True, num_workers=4
+            month_train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers
         )
-
-        # 创建记忆库loader
-        memory_loader = create_memory_loader(memory_samples, batch_size) if use_memory else None
 
         # 记录训练开始时间
         train_start_time = time.time()
 
-        # 训练: 当月数据 + 记忆库
-        if use_memory:
-            train_month(model, month_train_loader, memory_loader,
-                       optimizer, criterion, device, incremental_epochs)
-        else:
-            log.log(f"Training without memory replay...")
-            train_month(model, month_train_loader, None,
-                       optimizer, criterion, device, incremental_epochs)
+        # 训练: 具体增量学习方法由 strategy 决定
+        strategy.before_month(month, train_datasets, model, device)
+        strategy.train_month(
+            model=model,
+            month_train_loader=month_train_loader,
+            optimizer=optimizer,
+            criterion=criterion,
+            device=device,
+            epochs=incremental_epochs,
+        )
+        strategy.after_month(month, train_datasets, model, device)
+        log.log(f"  Strategy stats: {strategy.stats()}")
 
         # 计算当月训练耗时
         train_elapsed = time.time() - train_start_time
@@ -387,7 +239,7 @@ def run_continual_learning_unk(
 
         if cumulative_test_normal and cumulative_test_malicious:
             cumulative_test_dataset = ConcatDataset([cumulative_test_normal, cumulative_test_malicious])
-            cumulative_test_loader = DataLoader(cumulative_test_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
+            cumulative_test_loader = DataLoader(cumulative_test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
             log.log(f"Evaluating on seen months (cumulative test set, {len(cumulative_test_dataset)} samples)...")
             metrics = validate(model, cumulative_test_loader, device)
             f1, acc, recall, precision = metrics
@@ -398,14 +250,6 @@ def run_continual_learning_unk(
             seen_months_results['acc'].append(acc)
             seen_months_results['precision'].append(precision)
             seen_months_results['recall'].append(recall)
-
-        # ========== 更新记忆库 ==========
-        if use_memory:
-            log.log(f"Updating memory bank...")
-            month_datasets = {month: train_datasets[month]}
-            new_samples = select_sample(month_datasets, max_per_month=memory_per_month)
-            memory_samples.extend(new_samples)
-            print_memory_stats(memory_samples)
 
     # 保存新API统计
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -482,6 +326,7 @@ if __name__ == "__main__":
 
     # 训练参数
     batch_size = config['training']['batch_size']
+    num_workers = config['training'].get('num_workers', 4)
     seed = args.seed if args.seed is not None else config['training']['seed']
 
     # 设备配置
@@ -515,6 +360,8 @@ if __name__ == "__main__":
         batch_size=batch_size,
         memory_per_month=memory_per_month,
         use_memory=use_memory,
+        continual_config=cl_config,
+        num_workers=num_workers,
         device=device,
         seed=seed,
         pretrained_model_path=pretrained_model_path,

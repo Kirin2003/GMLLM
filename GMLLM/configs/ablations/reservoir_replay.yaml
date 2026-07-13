@@ -1,0 +1,16 @@
+parent: "../default.yaml"
+
+continual_learning:
+  strategy: "reservoir_replay"
+  replay:
+    reservoir_capacity: 500
+    class_balanced: true
+
+results:
+  future_month: "CL_unk_reservoir_replay_test_than_train_future_month.json"
+
+paths:
+  models_dir: "./models/default_reservoir_replay"
+  pretrained_model: "./models/default/base_model.pt"
+  prefix: "incremental_"
+
