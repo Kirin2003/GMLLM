@@ -1,0 +1,19 @@
+parent: "../profiles/deepseek.yaml"
+
+features:
+  use_behaviors: false
+
+dataset:
+  vocab_dir: "vocab_deepseek_structure_only"
+  benign_out: "benign_call_processed_deepseek_structure_only"
+  malicious_out: "malicious_call_processed_deepseek_structure_only"
+
+results:
+  future_month: "CL_unk_structure_only_test_than_train_future_month_deepseek.json"
+  efficiency: "CL_unk_structure_only_efficiency_deepseek.json"
+  base_model_result_file: "base_model_in_future_month_once_structure_only_deepseek.json"
+
+paths:
+  models_dir: "./models/deepseek_structure_only"
+  pretrained_model: "./models/deepseek_structure_only/base_model.pt"
+  prefix: "incremental_"

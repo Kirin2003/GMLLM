@@ -45,6 +45,38 @@ def print_memory_stats(memory_samples: list):
     log.log(f"  Memory bank: {len(memory_samples)} samples ({n_benign} benign, {n_malicious} malicious)")
 
 
+def is_cuda_device(device) -> bool:
+    """Return whether the resolved torch device is CUDA."""
+    return isinstance(device, torch.device) and device.type == "cuda"
+
+
+def bytes_to_mib(num_bytes: int) -> float:
+    return num_bytes / (1024 ** 2)
+
+
+def start_efficiency_measurement(device) -> float:
+    if is_cuda_device(device):
+        torch.cuda.synchronize(device)
+        torch.cuda.reset_peak_memory_stats(device)
+    return time.perf_counter()
+
+
+def finish_efficiency_measurement(device, start_time: float) -> dict:
+    if is_cuda_device(device):
+        torch.cuda.synchronize(device)
+        peak_allocated = bytes_to_mib(torch.cuda.max_memory_allocated(device))
+        peak_reserved = bytes_to_mib(torch.cuda.max_memory_reserved(device))
+    else:
+        peak_allocated = None
+        peak_reserved = None
+
+    return {
+        "update_time": time.perf_counter() - start_time,
+        "peak_gpu_memory_allocated_mb": peak_allocated,
+        "peak_gpu_memory_reserved_mb": peak_reserved,
+    }
+
+
 # ============================================================================
 # 主函数
 # ============================================================================
@@ -59,11 +91,14 @@ def run_continual_learning_unk(
     memory_per_month: int = 10,
     use_memory: bool = True,
     continual_config: dict = None,
+    model_config: dict = None,
+    features_config: dict = None,
     num_workers: int = 4,
     device: str = "cuda" if torch.cuda.is_available() else "cpu",
     seed: int = 42,
     pretrained_model_path: str = "./models/base_model.pt",
     result_file: str = "continual_learning_unk_test_than_train_future_month.json",
+    efficiency_result_file: str = None,
     model_save_path: str = "./models/incremental_unk_model_",
     results_dir: str = "../results"
 ):
@@ -97,10 +132,18 @@ def run_continual_learning_unk(
 
     # 2. 初始化模型
     device = torch.device(device)
+    model_config = model_config or {}
+    features_config = features_config or {}
     model = GCNWithBehavior(
         name_vocab_size=len(vocab['name2idx']),
         type_vocab_size=len(vocab['type2idx']),
-        behavior_dim=len(vocab['behavior2idx'])
+        behavior_dim=len(vocab['behavior2idx']),
+        hidden_dim=model_config.get('hidden_dim', 64),
+        num_classes=model_config.get('num_classes', 2),
+        dropout=model_config.get('dropout', 0.7),
+        use_name_features=features_config.get('use_names', True),
+        use_type_features=features_config.get('use_types', True),
+        use_behavior_features=features_config.get('use_behaviors', True),
     ).to(device)
 
     # 加载预训练模型
@@ -166,6 +209,25 @@ def run_continual_learning_unk(
 
     future_month_result = {'month': [], 'f1': [], 'acc': [], 'precision': [], 'recall': [], 'train_time': []}
     seen_months_results = {'month': [], 'f1': [], 'acc': [], 'precision': [], 'recall': []}
+    efficiency_results = {
+        "task": "continual_learning_monthly_update",
+        "strategy": strategy.name,
+        "device": str(device),
+        "seed": seed,
+        "base_train_months": list(base_train_months),
+        "incremental_months": list(incremental_months),
+        "incremental_epochs": incremental_epochs,
+        "batch_size": batch_size,
+        "use_memory": use_memory,
+        "memory_per_month": memory_per_month,
+        "time_unit": "seconds",
+        "memory_unit": "MiB",
+        "month": [],
+        "monthly_update_time": [],
+        "peak_gpu_memory_allocated_mb": [],
+        "peak_gpu_memory_reserved_mb": [],
+        "n_train": [],
+    }
 
     # 5. 增量学习
     log.log("\n" + "="*60)
@@ -201,8 +263,8 @@ def run_continual_learning_unk(
             month_train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers
         )
 
-        # 记录训练开始时间
-        train_start_time = time.time()
+        # 记录当月增量更新的耗时和峰值显存
+        train_start_time = start_efficiency_measurement(device)
 
         # 训练: 具体增量学习方法由 strategy 决定
         strategy.before_month(month, train_datasets, model, device)
@@ -217,10 +279,25 @@ def run_continual_learning_unk(
         strategy.after_month(month, train_datasets, model, device)
         log.log(f"  Strategy stats: {strategy.stats()}")
 
-        # 计算当月训练耗时
-        train_elapsed = time.time() - train_start_time
-        log.log(f"  Training time: {train_elapsed:.2f}s")
+        # 计算当月增量更新耗时和峰值显存
+        efficiency = finish_efficiency_measurement(device, train_start_time)
+        train_elapsed = efficiency["update_time"]
+        peak_allocated = efficiency["peak_gpu_memory_allocated_mb"]
+        peak_reserved = efficiency["peak_gpu_memory_reserved_mb"]
+        log.log(f"  Monthly update time: {train_elapsed:.2f}s")
+        if peak_allocated is not None:
+            log.log(
+                f"  Peak GPU memory: allocated={peak_allocated:.2f} MiB, "
+                f"reserved={peak_reserved:.2f} MiB"
+            )
+        else:
+            log.log("  Peak GPU memory: N/A (CPU device)")
         future_month_result['train_time'].append(train_elapsed)
+        efficiency_results['month'].append(month)
+        efficiency_results['monthly_update_time'].append(train_elapsed)
+        efficiency_results['peak_gpu_memory_allocated_mb'].append(peak_allocated)
+        efficiency_results['peak_gpu_memory_reserved_mb'].append(peak_reserved)
+        efficiency_results['n_train'].append(len(month_train_dataset))
 
         # 保存当月模型
         model_path = f"{model_save_path}{month}.pt"
@@ -265,6 +342,25 @@ def run_continual_learning_unk(
                 f"Precision={future_month_result['avg_precision']:.4f}, Recall={future_month_result['avg_recall']:.4f}")
         log.log(f"Average training time per month: {future_month_result['avg_train_time']:.2f}s")
 
+    if efficiency_results['monthly_update_time']:
+        efficiency_results['avg_monthly_update_time'] = (
+            sum(efficiency_results['monthly_update_time']) / len(efficiency_results['monthly_update_time'])
+        )
+        allocated_values = [
+            value for value in efficiency_results['peak_gpu_memory_allocated_mb'] if value is not None
+        ]
+        reserved_values = [
+            value for value in efficiency_results['peak_gpu_memory_reserved_mb'] if value is not None
+        ]
+        if allocated_values:
+            efficiency_results['max_peak_gpu_memory_allocated_mb'] = max(allocated_values)
+        if reserved_values:
+            efficiency_results['max_peak_gpu_memory_reserved_mb'] = max(reserved_values)
+        log.log(
+            "Efficiency summary: "
+            f"avg monthly update time={efficiency_results['avg_monthly_update_time']:.2f}s"
+        )
+
     # 添加 seed 信息
     future_month_result['seed'] = seed
 
@@ -272,6 +368,14 @@ def run_continual_learning_unk(
     with open(future_results_file, 'w') as f:
         json.dump(future_month_result, f, indent=2)
     log.log(f"Future month results saved to {future_results_file}")
+
+    if efficiency_result_file is None:
+        efficiency_result_file = result_file.replace('.json', '_efficiency.json')
+    efficiency_results['seed'] = seed
+    efficiency_results_file = output_dir / efficiency_result_file
+    with open(efficiency_results_file, 'w') as f:
+        json.dump(efficiency_results, f, indent=2)
+    log.log(f"Efficiency results saved to {efficiency_results_file}")
 
     # 计算并添加 seen_months_results 平均值
     if seen_months_results['f1']:
@@ -342,7 +446,8 @@ if __name__ == "__main__":
 
     # 结果文件配置 (支持多种配置方式)
     results_config = config.get('results', {})
-    result_file = results_config.get('future_month')        
+    result_file = results_config.get('future_month')
+    efficiency_result_file = results_config.get('efficiency')
 
     # 模型保存路径配置 (组合 models_dir 和 prefix)
     models_dir = paths_config.get('models_dir', './models')
@@ -361,11 +466,14 @@ if __name__ == "__main__":
         memory_per_month=memory_per_month,
         use_memory=use_memory,
         continual_config=cl_config,
+        model_config=config.get('model', {}),
+        features_config=config.get('features', {}),
         num_workers=num_workers,
         device=device,
         seed=seed,
         pretrained_model_path=pretrained_model_path,
         result_file=result_file,
+        efficiency_result_file=efficiency_result_file,
         model_save_path=model_save_path,
         results_dir=results_dir
     )

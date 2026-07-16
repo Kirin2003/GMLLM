@@ -1,10 +1,8 @@
 """
-累积训练增量学习实现
-- 训练：每月用该月之前所有月份的数据训练（包括基础训练集 + 已完成的增量月份）
-- 测试：用下一个月数据测试
-- 无记忆池，直接使用全部历史数据
-- 每次都从头开始训练，epoch 与基础模型相同
-- 例如：2023-04用2023-03之前数据训练，测试2023-04；2023-05用2023-03~2023-04训练，测试2023-05
+每月全量重训基线
+- 测试：每个月先用上一轮模型在当前月完整数据上测试，保证当前月测试数据此前没有参与训练
+- 更新：测试后，从头初始化模型，并用基础训练月份到当前月的累计训练/验证划分重新训练一次
+- 用途：和增量学习的 monthly update time / peak GPU memory 做效率对比
 """
 
 import sys
@@ -14,8 +12,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import os
 import json
+import time
 import torch
-import torch.nn as nn
 from torch_geometric.loader import DataLoader
 from torch.utils.data import ConcatDataset
 from utils.month_utils import generate_month_range
@@ -26,6 +24,45 @@ from distinguish_GNN_2 import GCNWithBehavior, validate, set_seed, train_model
 from utils.logger_utils import Logger
 
 log = Logger("accumulate_train.log")
+
+
+def is_cuda_device(device) -> bool:
+    return isinstance(device, torch.device) and device.type == "cuda"
+
+
+def bytes_to_mib(num_bytes: int) -> float:
+    return num_bytes / (1024 ** 2)
+
+
+def start_efficiency_measurement(device) -> float:
+    if is_cuda_device(device):
+        torch.cuda.synchronize(device)
+        torch.cuda.reset_peak_memory_stats(device)
+    return time.perf_counter()
+
+
+def finish_efficiency_measurement(device, start_time: float) -> dict:
+    if is_cuda_device(device):
+        torch.cuda.synchronize(device)
+        peak_allocated = bytes_to_mib(torch.cuda.max_memory_allocated(device))
+        peak_reserved = bytes_to_mib(torch.cuda.max_memory_reserved(device))
+    else:
+        peak_allocated = None
+        peak_reserved = None
+
+    return {
+        "update_time": time.perf_counter() - start_time,
+        "peak_gpu_memory_allocated_mb": peak_allocated,
+        "peak_gpu_memory_reserved_mb": peak_reserved,
+    }
+
+
+def init_model(name2idx, type2idx, behavior2idx, device):
+    return GCNWithBehavior(
+        name_vocab_size=len(name2idx),
+        type_vocab_size=len(type2idx),
+        behavior_dim=len(behavior2idx)
+    ).to(device)
 
 
 def run_accumulate_train(
@@ -39,6 +76,7 @@ def run_accumulate_train(
     batch_size: int = 128,
     train_ratio: float = 0.8,
     val_ratio: float = 0.1,
+    num_workers: int = 4,
     device: str = "cuda" if torch.cuda.is_available() else "cpu",
     seed: int = 42,
     pretrained_model_path: str = "./models/default/base_model.pt",
@@ -47,253 +85,192 @@ def run_accumulate_train(
     results_dir: str = "../results"
 ):
     """
-    累积训练：每月用之前所有月份数据训练，测试下一个月（无记忆池）
-    每次从头开始训练，使用与基础模型相同的 epoch 数
+    每月全量更新：
+    1. 用当前模型先测试当前月完整数据。
+    2. 测试后，将当前月训练/验证划分加入累计数据。
+    3. 从头初始化模型，用 2022-01 到当前月的累计数据重新训练。
 
-    Args:
-        vocab_dir: 词汇表目录
-        data_paths: 数据路径配置
-        base_train_months: 基础训练月份范围
-        test_start_month: 测试开始月份（第一个增量月份）
-        test_end_month: 测试结束月份
-        epochs: 训练轮数（与基础模型相同）
-        patience: 早停耐心值
-        batch_size: 批次大小
-        train_ratio: 训练集比例
-        val_ratio: 验证集比例
-        device: 设备
-        seed: 随机种子
-        result_file: 结果保存文件名
-        model_save_path: 模型保存路径前缀
+    当前月完整数据只在步骤 1 之后才进入后续训练流程，因此不会出现先训练再测试当前月的泄漏。
     """
     output_dir = results_dir
-
     set_seed(seed)
 
     log.log("=" * 60)
-    log.log("Running Accumulate Training: Train on all past months, Test on next month")
+    log.log("Running Monthly Full Retraining Baseline")
     log.log("=" * 60)
 
-    # 1. 加载词汇表
     name2idx, type2idx, behavior2idx, edge_type2idx = load_vocabs(vocab_dir)
-    vocab = {'name2idx': name2idx, 'type2idx': type2idx,
-             'behavior2idx': behavior2idx, 'edge_type2idx': edge_type2idx}
-
+    vocab = {
+        'name2idx': name2idx,
+        'type2idx': type2idx,
+        'behavior2idx': behavior2idx,
+        'edge_type2idx': edge_type2idx,
+    }
     log.log(f"Vocabulary size: name={len(name2idx)}, type={len(type2idx)}, behavior={len(behavior2idx)}")
 
-    # 2. 加载所有月份数据（所有月份都按 8:1:1 划分）
-    all_months_split = {}  # {month: {'train': (n_train, m_train), 'val': (n_val, m_val), 'test': (n_test, m_test)}}
-
-    # 加载基础训练月份
+    device = torch.device(device)
     base_start, base_end = base_train_months
-    for month in generate_month_range(base_start, base_end):
+    test_months = list(generate_month_range(test_start_month, test_end_month))
+
+    all_months_split = {}
+    full_test_datasets = {}
+    all_months = list(generate_month_range(base_start, base_end)) + test_months
+    for month in all_months:
         normal_ds, malicious_ds = load_month_dataset(month, vocab, data_paths)
         log.log(f"  {month}: {len(normal_ds)} normal, {len(malicious_ds)} malicious")
+        full_test_datasets[month] = (normal_ds, malicious_ds)
 
-        # 8:1:1 划分
         (normal_train, normal_val, normal_test,
          malicious_train, malicious_val, malicious_test) = split_train_val_test(
              normal_ds, malicious_ds, train_ratio, val_ratio)
         all_months_split[month] = {
             'train': (normal_train, malicious_train),
             'val': (normal_val, malicious_val),
-            'test': (normal_test, malicious_test)
+            'test': (normal_test, malicious_test),
         }
 
-    # 加载增量月份（也按 8:1:1 划分）
-    inc_start = test_start_month
-    inc_end = test_end_month
-    for month in generate_month_range(inc_start, inc_end):
-        normal_ds, malicious_ds = load_month_dataset(month, vocab, data_paths)
-        log.log(f"  {month}: {len(normal_ds)} normal, {len(malicious_ds)} malicious")
+    results = {
+        'month': [],
+        'f1': [],
+        'acc': [],
+        'precision': [],
+        'recall': [],
+        'model_train_months_before_test': [],
+        'trained_through_after_update': [],
+        'n_train': [],
+        'n_val': [],
+        'n_test': [],
+        'full_retrain_time': [],
+        'peak_gpu_memory_allocated_mb': [],
+        'peak_gpu_memory_reserved_mb': [],
+        'seed': seed,
+        'time_unit': 'seconds',
+        'memory_unit': 'MiB',
+    }
 
-        # 8:1:1 划分
-        (normal_train, normal_val, normal_test,
-         malicious_train, malicious_val, malicious_test) = split_train_val_test(
-             normal_ds, malicious_ds, train_ratio, val_ratio)
-        all_months_split[month] = {
-            'train': (normal_train, malicious_train),
-            'val': (normal_val, malicious_val),
-            'test': (normal_test, malicious_test)
-        }
-
-    # 3. 获取测试月份列表
-    test_months = list(generate_month_range(inc_start, inc_end))
-    log.log(f"\nTest months: {test_months}")
-
-    # 4. 累积训练循环
-    results = {'month': [], 'f1': [], 'acc': [], 'precision': [], 'recall': [],
-               'train_months': [], 'n_train': [], 'n_val': [], 'n_test': []}
-
-    # 累积训练数据集：从基础训练月份开始，逐步加入
     cumulative_train_normal = []
     cumulative_train_malicious = []
     cumulative_val_normal = []
     cumulative_val_malicious = []
 
-    # 先加入基础训练月份数据
     for month in generate_month_range(base_start, base_end):
-        if month in all_months_split:
-            n_train, m_train = all_months_split[month]['train']
-            n_val, m_val = all_months_split[month]['val']
-            cumulative_train_normal.extend(list(n_train))
-            cumulative_train_malicious.extend(list(m_train))
-            cumulative_val_normal.extend(list(n_val))
-            cumulative_val_malicious.extend(list(m_val))
+        n_train, m_train = all_months_split[month]['train']
+        n_val, m_val = all_months_split[month]['val']
+        cumulative_train_normal.extend(list(n_train))
+        cumulative_train_malicious.extend(list(m_train))
+        cumulative_val_normal.extend(list(n_val))
+        cumulative_val_malicious.extend(list(m_val))
 
-    log.log(f"\n{'=' * 60}")
-    log.log("Starting Accumulate Training (No Memory Pool)")
-    log.log(f"Epochs per round: {epochs}, Patience: {patience}")
-    log.log(f"{'=' * 60}")
-
-    # ===== 测试 2023-03 月份（使用基础模型） =====
-    log.log(f"\n{'=' * 60}")
-    log.log("Testing 2023-03 with base model")
-    log.log(f"{'=' * 60}")
-
-    # 加载 2023-03 月份数据（全部作为测试集）
-    test_month_03 = '2023-03'
-    normal_ds_03, malicious_ds_03 = load_month_dataset(test_month_03, vocab, data_paths)
-    log.log(f"  {test_month_03}: {len(normal_ds_03)} normal, {len(malicious_ds_03)} malicious")
-
-    # 全部作为测试集
-    test_dataset_03 = ConcatDataset([normal_ds_03, malicious_ds_03])
-    test_loader_03 = DataLoader(test_dataset_03, batch_size=batch_size, shuffle=False, num_workers=4)
-    n_test_03 = len(normal_ds_03) + len(malicious_ds_03)
-    log.log(f"Test samples: {n_test_03} (normal={len(normal_ds_03)}, malicious={len(malicious_ds_03)})")
-
-    # 加载基础模型
-    device = torch.device(device)
-    base_model = GCNWithBehavior(
-        name_vocab_size=len(name2idx),
-        type_vocab_size=len(type2idx),
-        behavior_dim=len(behavior2idx)
-    ).to(device)
-    base_model.load_state_dict(torch.load(pretrained_model_path, map_location=device))
+    current_model = init_model(name2idx, type2idx, behavior2idx, device)
+    current_model.load_state_dict(torch.load(pretrained_model_path, map_location=device))
+    current_model_train_end = base_end
     log.log(f"Loaded base model from {pretrained_model_path}")
 
-    # 测试 2023-03
-    log.log(f"Evaluating on {test_month_03}...")
-    metrics_03 = validate(base_model, test_loader_03, device)
-    f1_03, acc_03, recall_03, precision_03 = metrics_03
-    log.log(f"  Results: F1={f1_03:.4f}, Acc={acc_03:.4f}, Precision={precision_03:.4f}, Recall={recall_03:.4f}")
+    os.makedirs(os.path.dirname(model_save_path) or "./models", exist_ok=True)
 
-    # 保存 2023-03 测试结果
-    results_03 = {
-        'month': test_month_03,
-        'f1': f1_03,
-        'acc': acc_03,
-        'precision': precision_03,
-        'recall': recall_03,
-        'n_test': n_test_03,
-        'model': 'base_model.pt'
-    }
-    log.log(f"2023-03 test results: {results_03}")
-
-    # 遍历每个测试月份
-    for i, test_month in enumerate(test_months):
-        log.log(f"\n{'=' * 40}")
-        log.log(f"Train Month: {test_month} -> Test Month: {test_months[i+1] if i+1 < len(test_months) else 'None'}")
+    for month in test_months:
+        log.log("\n" + "=" * 40)
+        log.log(f"Month {month}: test first, then full retrain through {month}")
         log.log(f"{'=' * 40}")
 
-        # 先把当月数据加入累积数据集，再用累积数据训练
-        n_train_cur, m_train_cur = all_months_split[test_month]['train']
-        n_val_cur, m_val_cur = all_months_split[test_month]['val']
+        normal_test_full, malicious_test_full = full_test_datasets[month]
+        test_dataset = ConcatDataset([normal_test_full, malicious_test_full])
+        test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+        n_test_samples = len(test_dataset)
+
+        log.log(
+            f"Evaluating {month} before using this month for training "
+            f"({n_test_samples} samples, model trained through {current_model_train_end})..."
+        )
+        f1, acc, recall, precision = validate(current_model, test_loader, device)
+        log.log(f"  Results: F1={f1:.4f}, Acc={acc:.4f}, Precision={precision:.4f}, Recall={recall:.4f}")
+
+        n_train_cur, m_train_cur = all_months_split[month]['train']
+        n_val_cur, m_val_cur = all_months_split[month]['val']
         cumulative_train_normal.extend(list(n_train_cur))
         cumulative_train_malicious.extend(list(m_train_cur))
         cumulative_val_normal.extend(list(n_val_cur))
         cumulative_val_malicious.extend(list(m_val_cur))
 
-        # 用累积数据训练，测试下一个月
-        train_normal = list(cumulative_train_normal)
-        train_malicious = list(cumulative_train_malicious)
-        val_normal = list(cumulative_val_normal)
-        val_malicious = list(cumulative_val_malicious)
+        train_dataset = ConcatDataset([list(cumulative_train_normal), list(cumulative_train_malicious)])
+        val_dataset = ConcatDataset([list(cumulative_val_normal), list(cumulative_val_malicious)])
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
 
-        # 获取下一个月作为测试数据
-        if i + 1 < len(test_months):
-            next_month = test_months[i + 1]
-            n_test, m_test = all_months_split[next_month]['test']
-            test_dataset = ConcatDataset([n_test, m_test])
-            n_test_samples = len(n_test) + len(m_test)
-            log.log(f"Test on {next_month}: {n_test_samples} samples")
-        else:
-            # 最后一个月份，只测试不训练
-            test_dataset = None
-            n_test_samples = 0
-            log.log("Last month - test only, no training")
+        n_train_samples = len(train_dataset)
+        n_val_samples = len(val_dataset)
+        log.log(f"Full retrain samples through {month}: train={n_train_samples}, val={n_val_samples}")
 
-        n_train_samples = len(train_normal) + len(train_malicious)
-        n_val_samples = len(val_normal) + len(val_malicious)
-
-        log.log(f"Train samples: {n_train_samples} (normal={len(train_normal)}, malicious={len(train_malicious)})")
-        log.log(f"Val samples: {n_val_samples} (normal={len(val_normal)}, malicious={len(val_malicious)})")
-        if n_test_samples > 0:
-            log.log(f"Test samples: {n_test_samples} (normal={len(n_test)}, malicious={len(m_test)})")
-
-        # 构建训练和验证数据加载器
-        train_dataset = ConcatDataset([train_normal, train_malicious])
-        val_dataset = ConcatDataset([val_normal, val_malicious])
-        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
-        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
-
-        # 重新初始化模型（从头开始训练）
-        device = torch.device(device)
-        model = GCNWithBehavior(
-            name_vocab_size=len(name2idx),
-            type_vocab_size=len(type2idx),
-            behavior_dim=len(behavior2idx)
-        ).to(device)
+        model = init_model(name2idx, type2idx, behavior2idx, device)
         optimizer = torch.optim.Adam(model.parameters(), lr=0.005, weight_decay=1e-3)
         criterion = torch.nn.CrossEntropyLoss()
+        model_path = f"{model_save_path}{month}.pt"
 
-        # 训练模型（如果还有下一个月需要测试）
-        model_path = f"{model_save_path}{test_month}.pt"
-        if test_dataset is not None:
-            model, best_val_f1 = train_model(
-                model=model,
-                train_loader=train_loader,
-                val_loader=val_loader,
-                optimizer=optimizer,
-                criterion=criterion,
-                device=device,
-                epochs=epochs,
-                patience=patience,
-                model_save_path=model_path
+        update_start = start_efficiency_measurement(device)
+        model, best_val_f1 = train_model(
+            model=model,
+            train_loader=train_loader,
+            val_loader=val_loader,
+            optimizer=optimizer,
+            criterion=criterion,
+            device=device,
+            epochs=epochs,
+            patience=patience,
+            model_save_path=model_path,
+        )
+        efficiency = finish_efficiency_measurement(device, update_start)
+        update_time = efficiency['update_time']
+        peak_allocated = efficiency['peak_gpu_memory_allocated_mb']
+        peak_reserved = efficiency['peak_gpu_memory_reserved_mb']
+
+        log.log(f"Best Val F1: {best_val_f1:.4f}")
+        log.log(f"Full retrain time: {update_time:.2f}s")
+        if peak_allocated is not None:
+            log.log(
+                f"Peak GPU memory: allocated={peak_allocated:.2f} MiB, "
+                f"reserved={peak_reserved:.2f} MiB"
             )
-            log.log(f"Best Val F1: {best_val_f1:.4f}")
-
-            # 测试
-            test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
-            log.log(f"Evaluating on {next_month}...")
-            metrics = validate(model, test_loader, device)
-            f1, acc, recall, precision = metrics
-            log.log(f"  Results: F1={f1:.4f}, Acc={acc:.4f}, Precision={precision:.4f}, Recall={recall:.4f}")
-
-            # 保存结果
-            results['month'].append(next_month)
-            results['f1'].append(f1)
-            results['acc'].append(acc)
-            results['precision'].append(precision)
-            results['recall'].append(recall)
-            results['train_months'].append(f"{base_start}-{test_month}")
-            results['n_train'].append(n_train_samples)
-            results['n_val'].append(n_val_samples)
-            results['n_test'].append(n_test_samples)
-
-            log.log(f"Model saved to {model_path}")
         else:
-            # 最后一个月份，不需要保存模型
-            log.log("Skipping training and testing for last month (no next month to test)")
+            log.log("Peak GPU memory: N/A (CPU device)")
+        log.log(f"Model saved to {model_path}")
 
-    # 5. 保存结果
+        results['month'].append(month)
+        results['f1'].append(f1)
+        results['acc'].append(acc)
+        results['precision'].append(precision)
+        results['recall'].append(recall)
+        results['model_train_months_before_test'].append(f"{base_start}-{current_model_train_end}")
+        results['trained_through_after_update'].append(f"{base_start}-{month}")
+        results['n_train'].append(n_train_samples)
+        results['n_val'].append(n_val_samples)
+        results['n_test'].append(n_test_samples)
+        results['full_retrain_time'].append(update_time)
+        results['peak_gpu_memory_allocated_mb'].append(peak_allocated)
+        results['peak_gpu_memory_reserved_mb'].append(peak_reserved)
+
+        current_model = model
+        current_model_train_end = month
+
+    if results['f1']:
+        results['avg_f1'] = sum(results['f1']) / len(results['f1'])
+        results['avg_acc'] = sum(results['acc']) / len(results['acc'])
+        results['avg_precision'] = sum(results['precision']) / len(results['precision'])
+        results['avg_recall'] = sum(results['recall']) / len(results['recall'])
+        results['avg_full_retrain_time'] = sum(results['full_retrain_time']) / len(results['full_retrain_time'])
+        allocated_values = [value for value in results['peak_gpu_memory_allocated_mb'] if value is not None]
+        reserved_values = [value for value in results['peak_gpu_memory_reserved_mb'] if value is not None]
+        if allocated_values:
+            results['max_peak_gpu_memory_allocated_mb'] = max(allocated_values)
+        if reserved_values:
+            results['max_peak_gpu_memory_reserved_mb'] = max(reserved_values)
+
     os.makedirs(output_dir, exist_ok=True)
     result_path = os.path.join(output_dir, result_file)
     with open(result_path, 'w') as f:
         json.dump(results, f, indent=2)
     log.log(f"\nResults saved to {result_path}")
 
-    return model, results
+    return current_model, results
 
 
 if __name__ == "__main__":
@@ -307,7 +284,6 @@ if __name__ == "__main__":
     config_path = args.config
     config = load_config(config_path)
 
-    # 数据集路径
     base_path = config['dataset']['base_path']
     vocab_dir = str(Path(base_path) / config['dataset']['vocab_dir'])
     data_paths = {
@@ -317,29 +293,25 @@ if __name__ == "__main__":
         'malicious_out': str(Path(base_path) / config['dataset']['malicious_out']),
     }
 
-    # 增量学习配置
     cl_config = config.get('continual_learning', {})
     base_train_months = tuple(cl_config.get('base_train_months', ['2022-01', '2023-02']))
     incremental_months = tuple(cl_config.get('incremental_months', ['2023-03', '2024-12']))
 
-    # 训练参数
     epochs = config['training']['epochs']
     patience = config['training']['patience']
     batch_size = config['training']['batch_size']
     train_ratio = config['training']['train_ratio']
     val_ratio = config['training']['val_ratio']
+    num_workers = config['training'].get('num_workers', 4)
     seed = config['training']['seed']
 
-    # 设备配置
     device_config = config.get('device', 'auto')
     if device_config == 'auto':
         device = "cuda" if torch.cuda.is_available() else "cpu"
     else:
         device = device_config
 
-    # 路径配置
     paths_config = config.get('paths', {})
-
     results_config = config.get('results', {})
     result_file = results_config.get('accumulate_train', 'accumulate_train_results.json')
 
@@ -363,10 +335,11 @@ if __name__ == "__main__":
         batch_size=batch_size,
         train_ratio=train_ratio,
         val_ratio=val_ratio,
+        num_workers=num_workers,
         device=device,
         seed=seed,
         pretrained_model_path=pretrained_model_path,
         result_file=result_file,
         model_save_path=model_save_path,
-        results_dir=results_dir
+        results_dir=results_dir,
     )

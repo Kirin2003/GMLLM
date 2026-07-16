@@ -1,16 +1,16 @@
-parent: "../default.yaml"
+parent: "../profiles/deepseek.yaml"
 
 continual_learning:
   strategy: "reservoir_replay"
   replay:
-    reservoir_capacity: 500
+    reservoir_capacity: 350
     class_balanced: true
 
 results:
-  future_month: "CL_unk_reservoir_replay_test_than_train_future_month.json"
+  future_month: "CL_unk_reservoir_replay_test_than_train_future_month_deepseek.json"
 
 paths:
-  models_dir: "./models/default_reservoir_replay"
-  pretrained_model: "./models/default/base_model.pt"
+  models_dir: "./models/deepseek_reservoir_replay"
+  pretrained_model: "./models/deepseek/base_model.pt"
   prefix: "incremental_"
 

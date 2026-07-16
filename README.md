@@ -139,6 +139,24 @@ python GMLLM/continual_learning_memory.py --config GMLLM/configs/default.yaml
 
 记忆池会从历史月份中按良性/恶意 1:1 抽样，并在训练时交替使用当月 batch 和记忆池 batch。
 
+### 5. Edge + Node Type 消融
+
+```bash
+python GMLLM/generate_graph_data_fromJson.py --config GMLLM/configs/ablations/edge_type_deepseek.yaml
+python GMLLM/distinguish_GNN_2.py --config GMLLM/configs/ablations/edge_type_deepseek.yaml
+python GMLLM/continual_learning_memory.py --config GMLLM/configs/ablations/edge_type_deepseek.yaml
+```
+
+该消融关闭 `x_names` 和 `nodes[].behaviors`，只使用 `node_type` embedding 作为节点特征，并通过 GCN 的 `edge_index` 做消息传递。它对应更严格的 structure-only / topology+type baseline，不包含 API/function name 语义。
+
+### 6. LLM Behavior Features + MLP 消融
+
+```bash
+python GMLLM/ablation_llm_behavior_mlp.py --config GMLLM/configs/ablations/llm_behavior_mlp_deepseek.yaml
+```
+
+该消融直接读取 raw call graph JSON 中的 `nodes[].behaviors`，聚合为包级 tabular feature，再用 MLP 分类。它不使用 `CallGraphDatasetFull_Lazy`、PyG graph data、`edge_index` 或 GCN，用于和主 GNN 流程对比图结构建模组件的必要性。
+
 ## 可选解释模块
 
 `GMLLM/run_autoexplanation_parallel.py` 用来并行启动 `GMLLM/auto_explanation.py`。

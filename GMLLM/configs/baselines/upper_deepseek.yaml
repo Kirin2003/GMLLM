@@ -1,0 +1,9 @@
+parent: "../profiles/deepseek.yaml"
+
+paths:
+  models_dir: "./models/deepseek_upper"
+  prefix: "upper_"
+  pretrained_model: "./models/deepseek/base_model.pt"
+
+results:
+  accumulate_train: "upper_train_results_deepseek.json"

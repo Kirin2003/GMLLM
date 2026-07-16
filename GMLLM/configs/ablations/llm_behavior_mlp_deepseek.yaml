@@ -1,0 +1,20 @@
+parent: "../profiles/deepseek.yaml"
+
+features:
+  behavior_aggregation: "presence"
+
+model:
+  type: "behavior_mlp"
+  mlp_hidden_dims: []
+  dropout: 0.0
+  activation: "relu"
+  num_classes: 2
+
+results:
+  future_month: "CL_unk_behavior_mlp_test_than_train_future_month_deepseek.json"
+  efficiency: "CL_unk_behavior_mlp_efficiency_deepseek.json"
+
+paths:
+  models_dir: "./models/deepseek_behavior_mlp"
+  pretrained_model: "./models/deepseek_behavior_mlp/base_model.pt"
+  prefix: "mlp_incremental_"

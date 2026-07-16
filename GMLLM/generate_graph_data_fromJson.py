@@ -20,7 +20,7 @@ class CallGraphDatasetFull_Lazy(Dataset):
     def __init__(self, root_dir, output_dir=None, fixed_label=None,
                  name2idx=None, type2idx=None, edge_type2idx=None, behavior2idx=None,
                  transform=None, pre_transform=None, start_month='2022-01', end_month='2024-12',
-                 call_graph_filename='call_graph.json'):
+                 call_graph_filename='call_graph.json', use_behaviors=True):
         self.root_dir = Path(root_dir)
         self.start_month = start_month
         self.end_month = end_month
@@ -28,8 +28,9 @@ class CallGraphDatasetFull_Lazy(Dataset):
         self.output_dir = Path(output_dir) if output_dir else self.root_dir / 'processed'
         self.fixed_label = fixed_label
         self.call_graph_filename = call_graph_filename
+        self.use_behaviors = use_behaviors
         assert fixed_label is not None, "Must provide fixed_label"
-        assert name2idx and type2idx and edge_type2idx and behavior2idx, "Must provide name2idx, type2idx, edge_type2idx, and behavior2idx"
+        assert name2idx is not None and type2idx is not None and edge_type2idx is not None and behavior2idx is not None, "Must provide name2idx, type2idx, edge_type2idx, and behavior2idx"
         self.name2idx = name2idx
         self.type2idx = type2idx
         self.edge_type2idx = edge_type2idx
@@ -107,7 +108,7 @@ class CallGraphDatasetFull_Lazy(Dataset):
                     for idx, node in enumerate(graph.get('nodes', [])):
                         name = node.get('qualified_name') or node.get('name', 'unknown_name')
                         node_type = node.get('type', 'unknown_type')
-                        behaviors = node.get('behaviors', [])
+                        behaviors = node.get('behaviors', []) if self.use_behaviors else []
                         name_ids.append(self.name2idx.get(name, self.name2idx['unknown_name']))
                         type_ids.append(self.type2idx.get(node_type, self.type2idx['unknown_type']))
                         behavior_vec = torch.zeros(len(self.behavior2idx))
@@ -174,7 +175,8 @@ class CallGraphDatasetFull_Lazy(Dataset):
             return []
         return [self.get(i) for i in range(len(self.all_graph_paths))
                 if self.all_graph_paths[i].startswith(f"{month}/")]
-def build_global_vocab(root_dirs, start_month='2022-01', end_month='2023-02', call_graph_filename='call_graph.json'):
+def build_global_vocab(root_dirs, start_month='2022-01', end_month='2023-02',
+                       call_graph_filename='call_graph.json', use_behaviors=True):
     print('Start building global vocab...')
     name_set, type_set, edge_type_set, behavior_set = set(), set(), set(), set()
     for root_dir in root_dirs:
@@ -194,8 +196,9 @@ def build_global_vocab(root_dirs, start_month='2022-01', end_month='2023-02', ca
                         type_ = node.get("type", "unknown_type")
                         name_set.add(name)
                         type_set.add(type_)
-                        for b in node.get("behaviors", []):
-                            behavior_set.add(b)
+                        if use_behaviors:
+                            for b in node.get("behaviors", []):
+                                behavior_set.add(b)
                     for link in graph.get("links", []):
                         edge_type_set.add(link.get("edge_type", "unknown"))
                 except Exception as e:
@@ -235,6 +238,7 @@ if __name__ == "__main__":
 
     # 从配置中读取 call_graph 文件名（默认为 call_graph.json）
     call_graph_filename = config['dataset'].get('call_graph_filename', 'call_graph.json')
+    use_behaviors = config.get('features', {}).get('use_behaviors', True)
 
     # 从配置中读取时间范围
     cl_config = config.get('continual_learning', {})
@@ -251,7 +255,8 @@ if __name__ == "__main__":
         [normal_root, malicious_root],
         start_month=vocab_start_month,
         end_month=vocab_end_month,
-        call_graph_filename=call_graph_filename
+        call_graph_filename=call_graph_filename,
+        use_behaviors=use_behaviors
     )
     vocab_time = time.time() - vocab_start
     print(f"  build_global_vocab completed in {vocab_time:.2f}s")
@@ -279,7 +284,8 @@ if __name__ == "__main__":
         fixed_label=0,
         start_month=data_start_month,
         end_month=data_end_month,
-        call_graph_filename=call_graph_filename
+        call_graph_filename=call_graph_filename,
+        use_behaviors=use_behaviors
     )
     benign_time = time.time() - benign_start
     print(f"  CallGraphDatasetFull_Lazy (benign) completed in {benign_time:.2f}s")
@@ -296,7 +302,8 @@ if __name__ == "__main__":
         fixed_label=1,
         start_month=data_start_month,
         end_month=data_end_month,
-        call_graph_filename=call_graph_filename
+        call_graph_filename=call_graph_filename,
+        use_behaviors=use_behaviors
     )
     malicious_time = time.time() - malicious_start
     print(f"  CallGraphDatasetFull_Lazy (malicious) completed in {malicious_time:.2f}s")

@@ -1,0 +1,21 @@
+parent: "../profiles/deepseek.yaml"
+
+features:
+  use_names: false
+  use_types: true
+  use_behaviors: false
+
+dataset:
+  vocab_dir: "vocab_deepseek_edge_type"
+  benign_out: "benign_call_processed_deepseek_edge_type"
+  malicious_out: "malicious_call_processed_deepseek_edge_type"
+
+results:
+  future_month: "CL_unk_edge_type_test_than_train_future_month_deepseek.json"
+  efficiency: "CL_unk_edge_type_efficiency_deepseek.json"
+  base_model_result_file: "base_model_in_future_month_once_edge_type_deepseek.json"
+
+paths:
+  models_dir: "./models/deepseek_edge_type"
+  pretrained_model: "./models/deepseek_edge_type/base_model.pt"
+  prefix: "incremental_"

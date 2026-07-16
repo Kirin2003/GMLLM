@@ -38,21 +38,56 @@ def set_seed(seed):
         torch.backends.cudnn.benchmark = False
 
 class GCNWithBehavior(nn.Module):
-    def __init__(self, name_vocab_size, type_vocab_size, behavior_dim, hidden_dim=64, num_classes=2):
+    def __init__(
+        self,
+        name_vocab_size,
+        type_vocab_size,
+        behavior_dim,
+        hidden_dim=64,
+        num_classes=2,
+        dropout=0.7,
+        use_name_features=True,
+        use_type_features=True,
+        use_behavior_features=True,
+    ):
         super().__init__()
-        self.name_emb = nn.Embedding(name_vocab_size, 64)
-        self.type_emb = nn.Embedding(type_vocab_size, 16)
-        input_dim = 64 + 16 + behavior_dim  # name + type + behaviors
+        self.use_name_features = use_name_features
+        self.use_type_features = use_type_features
+        self.use_behavior_features = use_behavior_features
+
+        input_dim = 0
+        if self.use_name_features:
+            self.name_emb = nn.Embedding(name_vocab_size, 64)
+            input_dim += 64
+        else:
+            self.name_emb = None
+
+        if self.use_type_features:
+            self.type_emb = nn.Embedding(type_vocab_size, 16)
+            input_dim += 16
+        else:
+            self.type_emb = None
+
+        if self.use_behavior_features:
+            input_dim += behavior_dim
+
+        if input_dim == 0:
+            raise ValueError("At least one node feature source must be enabled.")
+
         self.conv1 = GCNConv(input_dim, hidden_dim)
         self.conv2 = GCNConv(hidden_dim, hidden_dim)
         self.classifier = nn.Linear(hidden_dim, num_classes)
-        self.dropout = nn.Dropout(0.7)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, data):
-        name_feat = self.name_emb(data.x_names)
-        type_feat = self.type_emb(data.x_types)
-        behavior_feat = data.x_behaviors.float()
-        x = torch.cat([name_feat, type_feat, behavior_feat], dim=1)
+        features = []
+        if self.use_name_features:
+            features.append(self.name_emb(data.x_names))
+        if self.use_type_features:
+            features.append(self.type_emb(data.x_types))
+        if self.use_behavior_features:
+            features.append(data.x_behaviors.float())
+        x = torch.cat(features, dim=1)
         x = self.dropout(self.conv1(x, data.edge_index).relu())
         x = self.dropout(self.conv2(x, data.edge_index).relu())
 
@@ -211,6 +246,8 @@ def run_base_model(
     val_ratio: float = 0.1,
     device: str = "cuda",
     seed: int = 42,
+    model_config: dict = None,
+    features_config: dict = None,
     model_save_path: str = "./models/base_model.pt",
     result_file: str = "test_than_train_future_test_results.json",
     results_dir: str = "../results"
@@ -275,10 +312,18 @@ def run_base_model(
 
     # 初始化模型
     device = torch.device(device)
+    model_config = model_config or {}
+    features_config = features_config or {}
     model = GCNWithBehavior(
         name_vocab_size=len(name2idx),
         type_vocab_size=len(type2idx),
-        behavior_dim=len(behavior2idx)
+        behavior_dim=len(behavior2idx),
+        hidden_dim=model_config.get('hidden_dim', 64),
+        num_classes=model_config.get('num_classes', 2),
+        dropout=model_config.get('dropout', 0.7),
+        use_name_features=features_config.get('use_names', True),
+        use_type_features=features_config.get('use_types', True),
+        use_behavior_features=features_config.get('use_behaviors', True),
     ).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.005, weight_decay=1e-3)
     criterion = torch.nn.CrossEntropyLoss()
@@ -383,6 +428,8 @@ if __name__ == "__main__":
         val_ratio=val_ratio,
         device=device,
         seed=seed,
+        model_config=config.get('model', {}),
+        features_config=config.get('features', {}),
         model_save_path=f"{models_dir}/base_model.pt",
         result_file=base_model_result_file,
         results_dir=results_dir
