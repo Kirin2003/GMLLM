@@ -4,11 +4,19 @@
 """
 import csv
 import os
+import sys
 from pathlib import Path
 
+project_root = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(project_root))
+from utils.config_utils import load_dotenv
+
+load_dotenv()
+DATA_ROOT = Path(os.environ.get("DATA_ROOT", "/Data2/hxq"))
+
 # 配置路径
-CSV_PATH = "/Data2/hxq/GMLLM/results/virustotal_scan.csv"
-DATA_DIR = "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset_compressed/benign"
+CSV_PATH = str(project_root / "results" / "virustotal_scan.csv")
+DATA_DIR = str(DATA_ROOT / "datasets" / "incremental_packages_dynamic_capping_subset_compressed" / "benign")
 
 # 读取CSV中的benign包
 csv_packages = {}  # {month: set(packages)}

@@ -25,7 +25,17 @@ LLM 调用使用 OpenAI 兼容接口，相关参数写在 `GMLLM/configs/*.yaml`
 
 ## 数据目录
 
-数据集根目录由配置文件中的 `dataset.base_path` 指定。
+数据集根目录由配置文件中的 `dataset.base_path` 指定。默认配置使用 `${DATA_ROOT}` 作为机器相关的数据盘前缀：
+
+```bash
+cp .env.example .env
+# 当前服务器数据在 /Data2/hxq 时
+DATA_ROOT=/Data2/hxq
+# 另一台服务器数据在 /Data1/hxq 时，改成：
+DATA_ROOT=/Data1/hxq
+```
+
+也可以不写 `.env`，直接在 shell 中 `export DATA_ROOT=/Data1/hxq`。shell 环境变量优先于 `.env`。
 
 期望的源码目录结构：
 

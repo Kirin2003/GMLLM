@@ -4,7 +4,6 @@ import csv
 import json
 import os
 import time
-import yaml
 import argparse
 from pathlib import Path
 from typing import Optional, Dict, Tuple, List
@@ -14,14 +13,14 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # 添加项目根目录到 Python 路径
 
+from utils.config_utils import load_config as load_yaml_config
 from utils.logger_utils import Logger
 from utils.month_utils import generate_month_range
 
 
 def load_config(config_path: str) -> dict:
     """加载 direct_call_llm 配置文件"""
-    with open(config_path, 'r') as f:
-        return yaml.safe_load(f)
+    return load_yaml_config(config_path)
 
 
 def resolve_config_path(config_name: str) -> Path:
@@ -418,7 +417,7 @@ def main():
     logger.log(f"[DEBUG] LLM 配置: model={LLM_MODEL}")
     logger.log(f"[DEBUG] base_url: {LLM_CONFIG.get('base_url', 'NOT FOUND')}")
 
-    dataset_base = CONFIG.get("dataset_base", "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset")
+    dataset_base = os.path.expandvars(CONFIG.get("dataset_base", "${DATA_ROOT}/datasets/incremental_packages_dynamic_capping_subset"))
     batch_analyze_packages(dataset_base)
 
 

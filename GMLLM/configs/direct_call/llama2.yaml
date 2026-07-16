@@ -8,7 +8,7 @@ llm:
   context_length: 4096
 
 result_filename: "llama2.json"
-dataset_base: "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset"
+dataset_base: "${DATA_ROOT}/datasets/incremental_packages_dynamic_capping_subset"
 start_month: "2022-01"
 end_month: "2024-12"
 incremental_start_month: "2024-01"

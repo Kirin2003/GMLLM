@@ -1,0 +1,13 @@
+parent: "../profiles/deepseek.yaml"
+
+continual_learning:
+  memory_per_month: 5
+
+results:
+  future_month: "CL_unk_memory_5_test_than_train_future_month_deepseek.json"
+  efficiency: "CL_unk_memory_5_efficiency_deepseek.json"
+
+paths:
+  models_dir: "./models/deepseek_memory_5"
+  pretrained_model: "./models/deepseek/base_model.pt"
+  prefix: "incremental_"

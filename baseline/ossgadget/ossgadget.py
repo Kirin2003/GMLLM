@@ -4,6 +4,7 @@
 """
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -12,16 +13,20 @@ from typing import Tuple
 # 添加项目根目录到 Python 路径
 project_root = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(project_root))
+from utils.config_utils import load_dotenv
 from utils.logger_utils import Logger
+
+load_dotenv()
+DATA_ROOT = Path(os.environ.get("DATA_ROOT", "/Data2/hxq"))
 
 # 全局日志记录器
 log = Logger("ossgadget.log")
 
 # 配置
-HTTP_SERVER_DIR = "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset_compressed"
+HTTP_SERVER_DIR = str(DATA_ROOT / "datasets" / "incremental_packages_dynamic_capping_subset_compressed")
 HTTP_SERVER_PORT = 8045
-OSSGADGET_PATH = "/Data2/hxq/ossgadget/ossgadget"
-OUTPUT_BASE_DIR = "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset"
+OSSGADGET_PATH = str(DATA_ROOT / "ossgadget" / "ossgadget")
+OUTPUT_BASE_DIR = str(DATA_ROOT / "datasets" / "incremental_packages_dynamic_capping_subset")
 
 
 def analyze_package(package_path: str):

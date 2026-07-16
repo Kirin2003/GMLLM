@@ -1,8 +1,39 @@
-"""配置加载工具，支持 parent 继承机制"""
+"""配置加载工具，支持 parent 继承机制和环境变量展开"""
 
+import os
 import yaml
 from pathlib import Path
 from typing import Dict, Any
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+ENV_FILE = PROJECT_ROOT / ".env"
+
+
+def load_dotenv(env_path: Path = ENV_FILE) -> None:
+    """加载项目根目录 .env，已存在的环境变量优先级更高。"""
+    if not env_path.exists():
+        return
+
+    with open(env_path, "r") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            os.environ.setdefault(key, value)
+
+
+def expand_env_vars(value: Any) -> Any:
+    """递归展开配置中的 ${VAR} 和 $VAR。"""
+    if isinstance(value, dict):
+        return {k: expand_env_vars(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [expand_env_vars(item) for item in value]
+    if isinstance(value, str):
+        return os.path.expandvars(value)
+    return value
 
 
 def deep_merge(base: Dict, override: Dict) -> Dict:
@@ -40,6 +71,7 @@ def load_config(config_path: str) -> Dict[str, Any]:
 
         # 结果: 合并后的配置
     """
+    load_dotenv()
     config_path = Path(config_path)
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
@@ -57,7 +89,7 @@ def load_config(config_path: str) -> Dict[str, Any]:
         # 深度合并：parent 作为基础，当前配置覆盖
         config = deep_merge(parent_config, config)
 
-    return config
+    return expand_env_vars(config)
 
 
 def load_config_with_defaults(config_path: str, default_config: str = None) -> Dict[str, Any]:

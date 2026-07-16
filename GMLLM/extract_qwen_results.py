@@ -2,7 +2,15 @@
 """从qwen3_5_27b.json提取结果到CSV"""
 import csv
 import json
+import os
+import sys
 from pathlib import Path
+
+project_root = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(project_root))
+from utils.config_utils import load_dotenv
+
+load_dotenv()
 
 
 def extract_qwen_results_to_csv(dataset_base: str, output_csv: str, json_filename: str = "qwen3_5_27b.json"):
@@ -70,7 +78,7 @@ if __name__ == "__main__":
                         help='模型名称')
     args = parser.parse_args()
 
-    dataset_base = "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset"
+    dataset_base = str(Path(os.environ.get("DATA_ROOT", "/Data2/hxq")) / "datasets" / "incremental_packages_dynamic_capping_subset")
     output_csv = str(Path(__file__).resolve().parent.parent / "results" / f"direct_call_llm_local_{args.model}.csv")
     json_filename = f"{args.model}.json"
     extract_qwen_results_to_csv(dataset_base, output_csv, json_filename)

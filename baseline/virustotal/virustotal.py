@@ -18,7 +18,12 @@ import sys
 # 添加项目根目录到 Python 路径
 project_root = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(project_root))
+from utils.config_utils import load_dotenv
 from utils.logger_utils import Logger
+
+load_dotenv()
+DATA_ROOT = Path(os.environ.get("DATA_ROOT", "/Data2/hxq"))
+RESULTS_DIR = project_root / "results"
 
 # 全局日志对象
 logger = Logger("virustotal.log")
@@ -75,9 +80,9 @@ def get_result(analysis_id: str, api_key: str, timeout: int = 60) -> dict:
 
 def submit_scan_main():
     """Submit all packages for scanning."""
-    base_dir = "/Data2/hxq/datasets/incremental_packages_dynamic_capping_subset_compressed"
+    base_dir = str(DATA_ROOT / "datasets" / "incremental_packages_dynamic_capping_subset_compressed")
     api_key = os.environ.get("VIRUSTOTAL_API_KEY")
-    scan_csv = "/Data2/hxq/GMLLM/results/virustotal_scan_lion.csv"
+    scan_csv = str(RESULTS_DIR / "virustotal_scan_lion.csv")
 
     # Labels and their directories
     label_dirs = [
@@ -158,8 +163,8 @@ def submit_scan_main():
 def get_results_main():
     """Query results for submitted scans."""
     api_key = os.environ.get("VIRUSTOTAL_API_KEY")
-    scan_csv = "/Data2/hxq/GMLLM/results/virustotal_scan_lion.csv"
-    result_csv = "/Data2/hxq/GMLLM/results/virustotal_lion.csv"
+    scan_csv = str(RESULTS_DIR / "virustotal_scan_lion.csv")
+    result_csv = str(RESULTS_DIR / "virustotal_lion.csv")
 
     # Read submitted scans
     rows = []
